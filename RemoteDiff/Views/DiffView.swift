@@ -23,6 +23,7 @@ struct DiffView: View {
     let host: String
     let repoPath: String
     let gitRef: String
+    let theme: SyntaxTheme
     @Binding var viewMode: DiffViewMode
     @ObservedObject var fileContentService: FileContentService
 
@@ -86,9 +87,10 @@ struct DiffView: View {
 
     @ViewBuilder
     private func diffModeContent(_ fileDiff: FileDiff) -> some View {
+        let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let leftLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .left)
         let rightLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .right)
-        dualPaneScroll(left: leftLines, right: rightLines)
+        dualPaneScroll(left: leftLines, right: rightLines, language: lang, theme: theme)
     }
 
     // MARK: - File Content Mode (Full File / Side by Side)
@@ -126,17 +128,19 @@ struct DiffView: View {
 
     @ViewBuilder
     private func fullFileContent(_ fileDiff: FileDiff) -> some View {
+        let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
         let lines = DisplayLineBuilder.buildFullFileLines(
             content: fileContentService.newContent ?? "", changedLines: addedLines
         )
         scrollableContent {
-            CodePaneView(lines: lines)
+            CodePaneView(lines: lines, language: lang, theme: theme)
         }
     }
 
     @ViewBuilder
     private func sideBySideContent(_ fileDiff: FileDiff) -> some View {
+        let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let deletedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .deletion)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
         let oldLines = DisplayLineBuilder.buildFullFileLines(
@@ -145,7 +149,7 @@ struct DiffView: View {
         let newLines = DisplayLineBuilder.buildFullFileLines(
             content: fileContentService.newContent ?? "", changedLines: addedLines
         )
-        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New")
+        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New", language: lang, theme: theme)
     }
 
     // MARK: - Scrollable Content Helpers
@@ -167,19 +171,21 @@ struct DiffView: View {
     @ViewBuilder
     private func dualPaneScroll(
         left: [DisplayLine], right: [DisplayLine],
-        leftLabel: String? = nil, rightLabel: String? = nil
+        leftLabel: String? = nil, rightLabel: String? = nil,
+        language: LanguageConfig? = nil,
+        theme: SyntaxTheme = .xcodeDefault
     ) -> some View {
         GeometryReader { geo in
             scrollableContent {
                 HStack(alignment: .top, spacing: 0) {
-                    CodePaneView(lines: left, label: leftLabel)
+                    CodePaneView(lines: left, label: leftLabel, language: language, theme: theme)
                         .frame(width: geo.size.width / 2)
 
                     Rectangle()
                         .fill(Color.secondary.opacity(0.2))
                         .frame(width: 1)
 
-                    CodePaneView(lines: right, label: rightLabel)
+                    CodePaneView(lines: right, label: rightLabel, language: language, theme: theme)
                         .frame(width: geo.size.width / 2)
                 }
             }

@@ -1,17 +1,32 @@
 import SwiftUI
+import AppKit
+
+// MARK: - Line Height
+
+/// Fixed line height used by both the NSTextView and the scroll anchor overlay.
+/// Kept in sync via NSParagraphStyle.minimumLineHeight/maximumLineHeight.
+let codeLineHeight: CGFloat = 20
 
 // MARK: - Code Pane View
 
 /// A unified view that renders a list of DisplayLines with line numbers,
-/// type indicators, and background highlighting. Used for all view modes.
+/// type indicators, background highlighting, and syntax coloring.
 /// Always rendered inline — the caller provides the ScrollView.
+///
+/// Uses NSTextView (via NSViewRepresentable) for proper multi-line text selection,
+/// with an invisible anchor overlay for ScrollViewReader.scrollTo() support.
 struct CodePaneView: View {
     let lines: [DisplayLine]
     let label: String?
+    let language: LanguageConfig?
+    let theme: SyntaxTheme
 
-    init(lines: [DisplayLine], label: String? = nil) {
+    init(lines: [DisplayLine], label: String? = nil, language: LanguageConfig? = nil,
+         theme: SyntaxTheme = .xcodeDefault) {
         self.lines = lines
         self.label = label
+        self.language = language
+        self.theme = theme
     }
 
     var body: some View {
@@ -27,60 +42,139 @@ struct CodePaneView: View {
                     .background(Color.secondary.opacity(0.05))
             }
 
-            LazyVStack(alignment: .leading, spacing: 0) {
-                ForEach(lines) { line in
-                    if line.isHunkHeader {
-                        hunkHeaderRow(line)
-                    } else {
-                        codeRow(line)
+            ZStack(alignment: .topLeading) {
+                // NSTextView — selectable text with syntax highlighting + line backgrounds
+                SelectableCodeView(
+                    attributedString: buildAttributedString(),
+                    lineCount: lines.count,
+                    backgroundColor: nsColor(theme.editorBackground)
+                )
+
+                // Invisible scroll anchors for ScrollViewReader.scrollTo()
+                LazyVStack(spacing: 0) {
+                    ForEach(lines) { line in
+                        Color.clear
+                            .frame(height: codeLineHeight)
+                            .id(line.id)
                     }
                 }
+                .padding(.top, 2) // match textContainerInset
+                .allowsHitTesting(false)
             }
-            .padding(.vertical, 2)
         }
     }
 
-    // MARK: - Rows
+    // MARK: - Attributed String Builder
 
-    @ViewBuilder
-    private func hunkHeaderRow(_ line: DisplayLine) -> some View {
-        Text(line.text)
-            .font(.system(.caption, design: .monospaced))
-            .foregroundColor(.secondary)
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.blue.opacity(0.06))
-    }
+    private func buildAttributedString() -> NSAttributedString {
+        let result = NSMutableAttributedString()
 
-    @ViewBuilder
-    private func codeRow(_ line: DisplayLine) -> some View {
-        HStack(spacing: 0) {
-            // Line number gutter
-            Text(line.lineNumber.map { String(format: "%4d", $0) } ?? "    ")
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary.opacity(0.5))
-                .frame(width: 40, alignment: .trailing)
-                .padding(.trailing, 4)
+        let gutterFont = NSFont.monospacedSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        let codeFont = NSFont.monospacedSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
-            // Type indicator
-            Text(indicator(for: line.type))
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(indicatorColor(for: line.type))
-                .frame(width: 14)
+        let paraStyle = NSMutableParagraphStyle()
+        paraStyle.minimumLineHeight = codeLineHeight
+        paraStyle.maximumLineHeight = codeLineHeight
+        paraStyle.paragraphSpacing = 0
+        paraStyle.paragraphSpacingBefore = 0
 
-            // Code text
-            Text(line.text)
-                .font(.system(.body, design: .monospaced))
-                .lineLimit(1)
-                .frame(maxWidth: .infinity, alignment: .leading)
+        for (i, line) in lines.enumerated() {
+            if i > 0 {
+                result.append(NSAttributedString(string: "\n", attributes: [
+                    .font: codeFont, .paragraphStyle: paraStyle,
+                ]))
+            }
+
+            let lineAttr = NSMutableAttributedString()
+
+            if line.isHunkHeader {
+                lineAttr.append(NSAttributedString(string: line.text, attributes: [
+                    .font: gutterFont,
+                    .foregroundColor: nsColor(theme.hunkHeaderText),
+                    .paragraphStyle: paraStyle,
+                ]))
+                lineAttr.addAttribute(.backgroundColor, value: nsColor(theme.hunkHeaderBackground),
+                                      range: NSRange(location: 0, length: lineAttr.length))
+            } else {
+                // Line number
+                let numStr = line.lineNumber.map { String(format: "%4d", $0) } ?? "    "
+                lineAttr.append(NSAttributedString(string: numStr + " ", attributes: [
+                    .font: gutterFont,
+                    .foregroundColor: nsColor(theme.gutterText),
+                    .paragraphStyle: paraStyle,
+                ]))
+
+                // Indicator
+                lineAttr.append(NSAttributedString(string: indicator(for: line.type) + " ", attributes: [
+                    .font: gutterFont,
+                    .foregroundColor: nsIndicatorColor(for: line.type),
+                    .paragraphStyle: paraStyle,
+                ]))
+
+                // Syntax-highlighted code
+                appendHighlightedCode(line.text, to: lineAttr, font: codeFont, paraStyle: paraStyle)
+
+                // Per-line background for additions/deletions
+                if let bg = nsLineBackground(for: line.type) {
+                    lineAttr.addAttribute(.backgroundColor, value: bg,
+                                          range: NSRange(location: 0, length: lineAttr.length))
+                }
+            }
+
+            result.append(lineAttr)
         }
-        .padding(.horizontal, 4)
-        .padding(.vertical, 1)
-        .background(backgroundColor(for: line.type))
+
+        return result
     }
 
-    // MARK: - Styling
+    private func appendHighlightedCode(_ text: String, to result: NSMutableAttributedString,
+                                       font: NSFont, paraStyle: NSParagraphStyle) {
+        guard let language = language, !text.isEmpty else {
+            result.append(NSAttributedString(string: text, attributes: [
+                .font: font, .foregroundColor: nsColor(theme.plain), .paragraphStyle: paraStyle,
+            ]))
+            return
+        }
+
+        let tokens = SyntaxHighlighter.tokenize(line: text, language: language)
+        guard !tokens.isEmpty else {
+            result.append(NSAttributedString(string: text, attributes: [
+                .font: font, .foregroundColor: nsColor(theme.plain), .paragraphStyle: paraStyle,
+            ]))
+            return
+        }
+
+        for token in tokens {
+            result.append(NSAttributedString(string: token.text, attributes: [
+                .font: font,
+                .foregroundColor: nsColor(theme.color(for: token.kind)),
+                .paragraphStyle: paraStyle,
+            ]))
+        }
+    }
+
+    // MARK: - NSColor Helpers
+
+    private func nsColor(_ hex: HexColor) -> NSColor {
+        NSColor(red: hex.red, green: hex.green, blue: hex.blue, alpha: hex.alpha)
+    }
+
+    private func nsIndicatorColor(for type: DiffLineType) -> NSColor {
+        switch type {
+        case .addition: return .systemGreen
+        case .deletion: return .systemRed
+        default: return nsColor(theme.gutterText).withAlphaComponent(0.5)
+        }
+    }
+
+    private func nsLineBackground(for type: DiffLineType) -> NSColor? {
+        switch type {
+        case .addition: return nsColor(theme.additionBackground)
+        case .deletion: return nsColor(theme.deletionBackground)
+        case .empty:    return nsColor(theme.editorBackground).withAlphaComponent(0.5)
+        case .context:  return nil
+        }
+    }
 
     private func indicator(for type: DiffLineType) -> String {
         switch type {
@@ -89,21 +183,56 @@ struct CodePaneView: View {
         default: return " "
         }
     }
+}
 
-    private func indicatorColor(for type: DiffLineType) -> Color {
-        switch type {
-        case .addition: return .green
-        case .deletion: return .red
-        default: return .secondary.opacity(0.3)
-        }
+// MARK: - Selectable Code View (NSViewRepresentable)
+
+/// Wraps an NSTextView for proper multi-line text selection with attributed string content.
+/// Sizes to its content — no internal scrolling. The parent SwiftUI ScrollView handles scrolling.
+private struct SelectableCodeView: NSViewRepresentable {
+    let attributedString: NSAttributedString
+    let lineCount: Int
+    let backgroundColor: NSColor
+
+    func makeNSView(context: Context) -> NSTextView {
+        let textView = NSTextView()
+        textView.isEditable = false
+        textView.isSelectable = true
+        textView.isRichText = true
+        textView.drawsBackground = true
+        textView.backgroundColor = backgroundColor
+        textView.textContainerInset = NSSize(width: 4, height: 2)
+        textView.textContainer?.lineFragmentPadding = 0
+
+        // No line wrapping — code extends beyond visible area, clipped by frame
+        textView.textContainer?.widthTracksTextView = false
+        textView.textContainer?.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        textView.isHorizontallyResizable = true
+        textView.isVerticallyResizable = true
+        textView.maxSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+
+        return textView
     }
 
-    private func backgroundColor(for type: DiffLineType) -> Color {
-        switch type {
-        case .addition: return .green.opacity(0.1)
-        case .deletion: return .red.opacity(0.1)
-        case .empty: return .secondary.opacity(0.03)
-        case .context: return .clear
+    func updateNSView(_ textView: NSTextView, context: Context) {
+        // Only update text storage when content actually changed
+        if textView.string != attributedString.string {
+            textView.textStorage?.setAttributedString(attributedString)
         }
+        textView.backgroundColor = backgroundColor
+    }
+
+    /// Reports content size to SwiftUI so the parent ScrollView knows the scrollable area.
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSTextView, context: Context) -> CGSize? {
+        let width = proposal.width ?? 400
+        let contentHeight = max(CGFloat(lineCount) * codeLineHeight, codeLineHeight)
+        let height = contentHeight + 4 // textContainerInset top (2) + bottom (2)
+        return CGSize(width: width, height: height)
     }
 }

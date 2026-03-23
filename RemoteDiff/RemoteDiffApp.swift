@@ -3,6 +3,8 @@ import AppKit
 
 @main
 struct RemoteDiffApp: App {
+    @StateObject private var themeStore = ThemeStore()
+
     init() {
         // Set app icon from asset catalog
         if let icon = NSImage(named: "AppIcon") {
@@ -12,10 +14,14 @@ struct RemoteDiffApp: App {
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(themeStore: themeStore)
                 .frame(minWidth: 900, minHeight: 600)
         }
         .windowStyle(.titleBar)
         .defaultSize(width: 1200, height: 800)
+
+        Settings {
+            SettingsView(themeStore: themeStore)
+        }
     }
 }

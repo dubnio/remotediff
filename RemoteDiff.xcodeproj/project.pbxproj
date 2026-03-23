@@ -25,6 +25,12 @@
 		AA000020 /* DiffParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000020 /* DiffParserTests.swift */; };
 		AA000021 /* SSHConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000021 /* SSHConfigTests.swift */; };
 		AA000022 /* DisplayLineBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000022 /* DisplayLineBuilderTests.swift */; };
+		AA000023 /* SyntaxHighlighter.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000023 /* SyntaxHighlighter.swift */; };
+		AA000024 /* SyntaxHighlighterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000024 /* SyntaxHighlighterTests.swift */; };
+		AA000025 /* SyntaxTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000025 /* SyntaxTheme.swift */; };
+		AA000026 /* ThemeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000026 /* ThemeStore.swift */; };
+		AA000027 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000027 /* SettingsView.swift */; };
+		AA000028 /* SyntaxThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000028 /* SyntaxThemeTests.swift */; };
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -58,6 +64,12 @@
 		AB000020 /* DiffParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffParserTests.swift; sourceTree = "<group>"; };
 		AB000021 /* SSHConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConfigTests.swift; sourceTree = "<group>"; };
 		AB000022 /* DisplayLineBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLineBuilderTests.swift; sourceTree = "<group>"; };
+		AB000023 /* SyntaxHighlighter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighter.swift; sourceTree = "<group>"; };
+		AB000024 /* SyntaxHighlighterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxHighlighterTests.swift; sourceTree = "<group>"; };
+		AB000025 /* SyntaxTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxTheme.swift; sourceTree = "<group>"; };
+		AB000026 /* ThemeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemeStore.swift; sourceTree = "<group>"; };
+		AB000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		AB000028 /* SyntaxThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxThemeTests.swift; sourceTree = "<group>"; };
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF000002 /* RemoteDiffTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RemoteDiffTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -111,6 +123,9 @@
 				AB000004 /* SSHConfig.swift */,
 				AB000005 /* DiffParser.swift */,
 				AB000018 /* DisplayLineBuilder.swift */,
+				AB000023 /* SyntaxHighlighter.swift */,
+				AB000025 /* SyntaxTheme.swift */,
+				AB000026 /* ThemeStore.swift */,
 				AB000014 /* ConnectionStore.swift */,
 			);
 			path = Models;
@@ -132,6 +147,8 @@
 				AB000020 /* DiffParserTests.swift */,
 				AB000021 /* SSHConfigTests.swift */,
 				AB000022 /* DisplayLineBuilderTests.swift */,
+				AB000024 /* SyntaxHighlighterTests.swift */,
+				AB000028 /* SyntaxThemeTests.swift */,
 			);
 			path = RemoteDiffTests;
 			sourceTree = "<group>";
@@ -153,6 +170,7 @@
 				AB000019 /* CodePaneView.swift */,
 				AB000011 /* SidebarView.swift */,
 				AB000012 /* LiveStatusBar.swift */,
+				AB000027 /* SettingsView.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -270,6 +288,10 @@
 				AA000019 /* CodePaneView.swift in Sources */,
 				AA000011 /* SidebarView.swift in Sources */,
 				AA000012 /* LiveStatusBar.swift in Sources */,
+				AA000023 /* SyntaxHighlighter.swift in Sources */,
+				AA000025 /* SyntaxTheme.swift in Sources */,
+				AA000026 /* ThemeStore.swift in Sources */,
+				AA000027 /* SettingsView.swift in Sources */,
 				AA000013 /* ConnectionStore.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -281,6 +303,8 @@
 				AA000020 /* DiffParserTests.swift in Sources */,
 				AA000021 /* SSHConfigTests.swift in Sources */,
 				AA000022 /* DisplayLineBuilderTests.swift in Sources */,
+				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
+				AA000028 /* SyntaxThemeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
