@@ -4,6 +4,7 @@ import SwiftUI
 
 /// A unified view that renders a list of DisplayLines with line numbers,
 /// type indicators, and background highlighting. Used for all view modes.
+/// Always rendered inline — the caller provides the ScrollView.
 struct CodePaneView: View {
     let lines: [DisplayLine]
     let label: String?
@@ -26,18 +27,16 @@ struct CodePaneView: View {
                     .background(Color.secondary.opacity(0.05))
             }
 
-            ScrollView {
-                LazyVStack(alignment: .leading, spacing: 0) {
-                    ForEach(lines) { line in
-                        if line.isHunkHeader {
-                            hunkHeaderRow(line)
-                        } else {
-                            codeRow(line)
-                        }
+            LazyVStack(alignment: .leading, spacing: 0) {
+                ForEach(lines) { line in
+                    if line.isHunkHeader {
+                        hunkHeaderRow(line)
+                    } else {
+                        codeRow(line)
                     }
                 }
-                .padding(.vertical, 2)
             }
+            .padding(.vertical, 2)
         }
     }
 
