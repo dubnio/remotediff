@@ -6,7 +6,7 @@ A native macOS app for viewing git diffs from remote servers over SSH, with side
 
 ## Features
 
-- **Three view modes** — Side-by-side full file, diff hunks, or single-pane full file
+- **Three view modes** — Side-by-side full file, diff hunks, or single-pane full file (dual-pane modes scroll in sync)
 - **SSH git diff** — Fetches diffs from remote hosts via `/usr/bin/ssh`, shell-agnostic (bash, fish, zsh)
 - **Live watching** — ControlMaster-based persistent SSH with 2s polling and 800ms debounce
 - **Connection management** — Save SSH connections with multiple repositories, auto-fetch on selection
@@ -15,7 +15,7 @@ A native macOS app for viewing git diffs from remote servers over SSH, with side
 - **30+ language configs** — File-extension-based language detection for syntax-aware rendering
 - **SSH config integration** — Auto-parses `~/.ssh/config` for host picker
 - **Diff result caching** — Switch between repos without re-fetching
-- **Keyboard shortcuts** — ⌘R refresh, ⌘[ ⌘] navigate files
+- **Keyboard shortcuts** — ⌘R refresh, ⌘[ ⌘] navigate files, ⌘↑ ⌘↓ jump between changes
 
 ## Building
 
@@ -39,7 +39,8 @@ Creates `.build/release/RemoteDiff.app` and a `.zip` ready to share. On the targ
 2. Add repositories with a path and git ref
 3. Select a repo — auto-fetches the diff and displays in side-by-side mode
 4. Use the segmented picker to switch between **Side by Side**, **Diff**, and **Full File** views
-5. Toggle **Watch** for live change detection
+5. Use ↑/↓ buttons (or ⌘↑/⌘↓) to jump between changes
+6. Toggle **Watch** for live change detection
 
 ## Project Structure
 

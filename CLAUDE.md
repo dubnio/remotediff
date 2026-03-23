@@ -42,7 +42,9 @@ SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when
 
 ## Key Patterns
 
-- **One rendering component**: `CodePaneView` renders any `[DisplayLine]` array. Used by all three view modes (Diff, Full File, Side by Side).
+- **One rendering component**: `CodePaneView` renders any `[DisplayLine]` array inline (caller provides the `ScrollView`). Used by all three view modes.
+- **Synced scrolling**: Dual-pane views (Diff, Side by Side) share a single `ScrollView` so both panes scroll together. `dualPaneScroll()` in `DiffView` encapsulates this pattern.
+- **Change navigation**: `ScrollViewReader` + `scrollTo()` drives ⌘↑/⌘↓ jump-to-change. Anchors are hunk IDs in diff mode, grouped changed line IDs in file modes. `changeAnchors(for:)` computes targets per view mode.
 - **`DisplayLineBuilder`** is pure logic with no UI dependencies — fully unit tested.
 - Script building centralized in `SSHService.buildDiffScript()` / `buildPollScript()`.
 - SSH execution uses `runSSHBash()` which pipes scripts via stdin to avoid quoting issues.
@@ -54,11 +56,13 @@ SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when
 
 ## View Modes
 
+All dual-pane modes use `dualPaneScroll()` (shared `ScrollView` via `GeometryReader` + `ScrollViewReader`). Single-pane uses `scrollableContent()`.
+
 | Mode | Data Source | Rendering |
 |------|------------|-----------|
-| **Diff** | `SSHService.fileDiffs` → `DisplayLineBuilder.buildDiffLines()` | Two `CodePaneView`s (left/right) |
-| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` | Two `CodePaneView`s with Old/New labels |
-| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` | One `CodePaneView` |
+| **Diff** | `SSHService.fileDiffs` → `DisplayLineBuilder.buildDiffLines()` | `dualPaneScroll` (left/right) |
+| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` | `dualPaneScroll` with Old/New labels |
+| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` | `scrollableContent` (single pane) |
 
 ## Testing
 

@@ -26,6 +26,10 @@ struct DiffView: View {
     @Binding var viewMode: DiffViewMode
     @ObservedObject var fileContentService: FileContentService
 
+    @State private var scrollTarget: String = ""
+    @State private var scrollTrigger: Int = 0
+    @State private var currentChangeIdx: Int = -1
+
     var body: some View {
         Group {
             if let fileDiff = fileDiff {
@@ -43,6 +47,16 @@ struct DiffView: View {
             } else {
                 placeholder(icon: "doc.text.magnifyingglass", title: "Select a file", color: .secondary)
             }
+        }
+        .onChange(of: fileDiff?.id) { _ in currentChangeIdx = -1 }
+        .onChange(of: viewMode) { _ in currentChangeIdx = -1 }
+        .background {
+            Button("") { navigateChange(direction: -1) }
+                .keyboardShortcut(.upArrow, modifiers: .command)
+                .hidden()
+            Button("") { navigateChange(direction: 1) }
+                .keyboardShortcut(.downArrow, modifiers: .command)
+                .hidden()
         }
     }
 
@@ -74,20 +88,7 @@ struct DiffView: View {
     private func diffModeContent(_ fileDiff: FileDiff) -> some View {
         let leftLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .left)
         let rightLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .right)
-
-        GeometryReader { geo in
-            HStack(spacing: 0) {
-                CodePaneView(lines: leftLines)
-                    .frame(width: geo.size.width / 2)
-
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 1)
-
-                CodePaneView(lines: rightLines)
-                    .frame(width: geo.size.width / 2)
-            }
-        }
+        dualPaneScroll(left: leftLines, right: rightLines)
     }
 
     // MARK: - File Content Mode (Full File / Side by Side)
@@ -129,7 +130,9 @@ struct DiffView: View {
         let lines = DisplayLineBuilder.buildFullFileLines(
             content: fileContentService.newContent ?? "", changedLines: addedLines
         )
-        CodePaneView(lines: lines)
+        scrollableContent {
+            CodePaneView(lines: lines)
+        }
     }
 
     @ViewBuilder
@@ -142,18 +145,43 @@ struct DiffView: View {
         let newLines = DisplayLineBuilder.buildFullFileLines(
             content: fileContentService.newContent ?? "", changedLines: addedLines
         )
+        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New")
+    }
 
+    // MARK: - Scrollable Content Helpers
+
+    /// Wraps content in a ScrollView with ScrollViewReader for change navigation.
+    @ViewBuilder
+    private func scrollableContent<Content: View>(@ViewBuilder content: @escaping () -> Content) -> some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                content()
+            }
+            .onChange(of: scrollTrigger) { _ in
+                withAnimation { proxy.scrollTo(scrollTarget, anchor: .top) }
+            }
+        }
+    }
+
+    /// Two side-by-side CodePaneViews in a synced ScrollView with GeometryReader.
+    @ViewBuilder
+    private func dualPaneScroll(
+        left: [DisplayLine], right: [DisplayLine],
+        leftLabel: String? = nil, rightLabel: String? = nil
+    ) -> some View {
         GeometryReader { geo in
-            HStack(spacing: 0) {
-                CodePaneView(lines: oldLines, label: "Old")
-                    .frame(width: geo.size.width / 2)
+            scrollableContent {
+                HStack(alignment: .top, spacing: 0) {
+                    CodePaneView(lines: left, label: leftLabel)
+                        .frame(width: geo.size.width / 2)
 
-                Rectangle()
-                    .fill(Color.secondary.opacity(0.2))
-                    .frame(width: 1)
+                    Rectangle()
+                        .fill(Color.secondary.opacity(0.2))
+                        .frame(width: 1)
 
-                CodePaneView(lines: newLines, label: "New")
-                    .frame(width: geo.size.width / 2)
+                    CodePaneView(lines: right, label: rightLabel)
+                        .frame(width: geo.size.width / 2)
+                }
             }
         }
     }
@@ -162,6 +190,8 @@ struct DiffView: View {
 
     @ViewBuilder
     private func fileHeader(_ fileDiff: FileDiff) -> some View {
+        let anchors = changeAnchors(for: fileDiff)
+
         HStack {
             if fileDiff.isNewFile {
                 Label("New File", systemImage: "plus.circle.fill").foregroundColor(.green).font(.caption)
@@ -180,6 +210,30 @@ struct DiffView: View {
             let stats = countStats(fileDiff)
             if stats.0 > 0 { Text("+\(stats.0)").foregroundColor(.green).font(.system(.caption, design: .monospaced)) }
             if stats.1 > 0 { Text("-\(stats.1)").foregroundColor(.red).font(.system(.caption, design: .monospaced)) }
+
+            // Change navigation
+            if !anchors.isEmpty {
+                HStack(spacing: 4) {
+                    Button { navigateChange(direction: -1) } label: {
+                        Image(systemName: "chevron.up")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(currentChangeIdx <= 0)
+
+                    Text("\(max(currentChangeIdx + 1, 1))/\(anchors.count)")
+                        .font(.system(.caption, design: .monospaced))
+                        .foregroundColor(.secondary)
+                        .frame(minWidth: 36)
+
+                    Button { navigateChange(direction: 1) } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.caption.weight(.semibold))
+                    }
+                    .buttonStyle(.borderless)
+                    .disabled(currentChangeIdx >= anchors.count - 1)
+                }
+            }
 
             if !fileDiff.isBinary {
                 Picker("", selection: $viewMode) {
@@ -216,5 +270,37 @@ struct DiffView: View {
             if line.type == .deletion { del += 1 }
         }}
         return (add, del)
+    }
+
+    // MARK: - Change Navigation
+
+    private func changeAnchors(for fileDiff: FileDiff) -> [String] {
+        if viewMode == .diff {
+            return (0..<fileDiff.hunks.count).map { "hunk-\($0)" }
+        }
+        // For file-based views, group consecutive changed line numbers.
+        // Side-by-side includes both additions (new file) and deletions (old file).
+        let additions = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
+        let changed = viewMode == .sideBySide
+            ? additions.union(DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .deletion))
+            : additions
+        let sorted = changed.sorted()
+        var anchors: [String] = []
+        var prev = -2
+        for num in sorted {
+            if num != prev + 1 { anchors.append("file-\(num)") }
+            prev = num
+        }
+        return anchors
+    }
+
+    private func navigateChange(direction: Int) {
+        guard let fileDiff = fileDiff else { return }
+        let anchors = changeAnchors(for: fileDiff)
+        guard !anchors.isEmpty else { return }
+        let newIdx = min(max(0, currentChangeIdx + direction), anchors.count - 1)
+        currentChangeIdx = newIdx
+        scrollTarget = anchors[newIdx]
+        scrollTrigger += 1
     }
 }
