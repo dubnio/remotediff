@@ -1,0 +1,540 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		AA000001 /* RemoteDiffApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000001 /* RemoteDiffApp.swift */; };
+		AA000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000002 /* ContentView.swift */; };
+		AA000003 /* DiffModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000003 /* DiffModels.swift */; };
+		AA000004 /* SSHConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000004 /* SSHConfig.swift */; };
+		AA000005 /* DiffParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000005 /* DiffParser.swift */; };
+		AA000006 /* SSHService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000006 /* SSHService.swift */; };
+		AA000007 /* ControlMasterWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000007 /* ControlMasterWatcher.swift */; };
+		AA000010 /* DiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010 /* DiffView.swift */; };
+		AA000011 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* SidebarView.swift */; };
+		AA000012 /* LiveStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* LiveStatusBar.swift */; };
+		AA000013 /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014 /* ConnectionStore.swift */; };
+		AA000016 /* LanguageConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000016 /* LanguageConfig.swift */; };
+		AA000017 /* FileContentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* FileContentService.swift */; };
+		AA000018 /* DisplayLineBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000018 /* DisplayLineBuilder.swift */; };
+		AA000019 /* CodePaneView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000019 /* CodePaneView.swift */; };
+		AA000020 /* DiffParserTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000020 /* DiffParserTests.swift */; };
+		AA000021 /* SSHConfigTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000021 /* SSHConfigTests.swift */; };
+		AA000022 /* DisplayLineBuilderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000022 /* DisplayLineBuilderTests.swift */; };
+		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		AC000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AE000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AD000001;
+			remoteInfo = RemoteDiff;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		AB000001 /* RemoteDiffApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RemoteDiffApp.swift; sourceTree = "<group>"; };
+		AB000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		AB000003 /* DiffModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffModels.swift; sourceTree = "<group>"; };
+		AB000004 /* SSHConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConfig.swift; sourceTree = "<group>"; };
+		AB000005 /* DiffParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffParser.swift; sourceTree = "<group>"; };
+		AB000006 /* SSHService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHService.swift; sourceTree = "<group>"; };
+		AB000007 /* ControlMasterWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlMasterWatcher.swift; sourceTree = "<group>"; };
+		AB000010 /* DiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffView.swift; sourceTree = "<group>"; };
+		AB000011 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
+		AB000012 /* LiveStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStatusBar.swift; sourceTree = "<group>"; };
+		AB000013 /* RemoteDiff.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RemoteDiff.entitlements; sourceTree = "<group>"; };
+		AB000014 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
+		AB000016 /* LanguageConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageConfig.swift; sourceTree = "<group>"; };
+		AB000017 /* FileContentService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileContentService.swift; sourceTree = "<group>"; };
+		AB000018 /* DisplayLineBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLineBuilder.swift; sourceTree = "<group>"; };
+		AB000019 /* CodePaneView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CodePaneView.swift; sourceTree = "<group>"; };
+		AB000020 /* DiffParserTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffParserTests.swift; sourceTree = "<group>"; };
+		AB000021 /* SSHConfigTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConfigTests.swift; sourceTree = "<group>"; };
+		AB000022 /* DisplayLineBuilderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayLineBuilderTests.swift; sourceTree = "<group>"; };
+		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AF000002 /* RemoteDiffTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RemoteDiffTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		AD000010 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AD000011 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		AG000001 = {
+			isa = PBXGroup;
+			children = (
+				AG000002 /* RemoteDiff */,
+				AG000005 /* RemoteDiffTests */,
+				AG000006 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		AG000002 /* RemoteDiff */ = {
+			isa = PBXGroup;
+			children = (
+				AB000001 /* RemoteDiffApp.swift */,
+				AB000002 /* ContentView.swift */,
+				AB000030 /* Assets.xcassets */,
+				AB000013 /* RemoteDiff.entitlements */,
+				AG000003 /* Models */,
+				AG000004 /* Services */,
+				AG000007 /* Views */,
+			);
+			path = RemoteDiff;
+			sourceTree = "<group>";
+		};
+		AG000003 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				AB000003 /* DiffModels.swift */,
+				AB000004 /* SSHConfig.swift */,
+				AB000005 /* DiffParser.swift */,
+				AB000018 /* DisplayLineBuilder.swift */,
+				AB000014 /* ConnectionStore.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		AG000004 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				AB000006 /* SSHService.swift */,
+				AB000017 /* FileContentService.swift */,
+				AB000007 /* ControlMasterWatcher.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		AG000005 /* RemoteDiffTests */ = {
+			isa = PBXGroup;
+			children = (
+				AB000020 /* DiffParserTests.swift */,
+				AB000021 /* SSHConfigTests.swift */,
+				AB000022 /* DisplayLineBuilderTests.swift */,
+			);
+			path = RemoteDiffTests;
+			sourceTree = "<group>";
+		};
+		AG000006 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				AF000001 /* RemoteDiff.app */,
+				AF000002 /* RemoteDiffTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		AG000007 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				AB000016 /* LanguageConfig.swift */,
+				AB000010 /* DiffView.swift */,
+				AB000019 /* CodePaneView.swift */,
+				AB000011 /* SidebarView.swift */,
+				AB000012 /* LiveStatusBar.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		AD000001 /* RemoteDiff */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AH000001 /* Build configuration list for PBXNativeTarget "RemoteDiff" */;
+			buildPhases = (
+				AD000002 /* Sources */,
+				AD000010 /* Frameworks */,
+				AD000003 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = RemoteDiff;
+			productName = RemoteDiff;
+			productReference = AF000001 /* RemoteDiff.app */;
+			productType = "com.apple.product-type.application";
+		};
+		AD000004 /* RemoteDiffTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AH000004 /* Build configuration list for PBXNativeTarget "RemoteDiffTests" */;
+			buildPhases = (
+				AD000005 /* Sources */,
+				AD000011 /* Frameworks */,
+				AD000006 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AC000002 /* PBXTargetDependency */,
+			);
+			name = RemoteDiffTests;
+			productName = RemoteDiffTests;
+			productReference = AF000002 /* RemoteDiffTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AE000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1500;
+				LastUpgradeCheck = 2630;
+				TargetAttributes = {
+					AD000001 = {
+						CreatedOnToolsVersion = 15.0;
+					};
+					AD000004 = {
+						CreatedOnToolsVersion = 15.0;
+						TestTargetID = AD000001;
+					};
+				};
+			};
+			buildConfigurationList = AH000007 /* Build configuration list for PBXProject "RemoteDiff" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = AG000001;
+			productRefGroup = AG000006 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				AD000001 /* RemoteDiff */,
+				AD000004 /* RemoteDiffTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		AD000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000030 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AD000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AD000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000001 /* RemoteDiffApp.swift in Sources */,
+				AA000002 /* ContentView.swift in Sources */,
+				AA000003 /* DiffModels.swift in Sources */,
+				AA000004 /* SSHConfig.swift in Sources */,
+				AA000005 /* DiffParser.swift in Sources */,
+				AA000006 /* SSHService.swift in Sources */,
+				AA000017 /* FileContentService.swift in Sources */,
+				AA000007 /* ControlMasterWatcher.swift in Sources */,
+				AA000016 /* LanguageConfig.swift in Sources */,
+				AA000010 /* DiffView.swift in Sources */,
+				AA000018 /* DisplayLineBuilder.swift in Sources */,
+				AA000019 /* CodePaneView.swift in Sources */,
+				AA000011 /* SidebarView.swift in Sources */,
+				AA000012 /* LiveStatusBar.swift in Sources */,
+				AA000013 /* ConnectionStore.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AD000005 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AA000020 /* DiffParserTests.swift in Sources */,
+				AA000021 /* SSHConfigTests.swift in Sources */,
+				AA000022 /* DisplayLineBuilderTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AC000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AD000001 /* RemoteDiff */;
+			targetProxy = AC000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		AH000002 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				"ASSETCATALOG_COMPILER_APPICON_NAME[sdk=macosx*]" = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = RemoteDiff/RemoteDiff.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = FW56CEM75A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evargas.RemoteDiff;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		AH000003 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = YES;
+				CODE_SIGN_ENTITLEMENTS = RemoteDiff/RemoteDiff.entitlements;
+				"CODE_SIGN_IDENTITY[sdk=macosx*]" = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				COMBINE_HIDPI_IMAGES = YES;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				DEVELOPMENT_TEAM = FW56CEM75A;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evargas.RemoteDiff;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+		AH000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evargas.RemoteDiffTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RemoteDiff.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RemoteDiff";
+			};
+			name = Debug;
+		};
+		AH000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEAD_CODE_STRIPPING = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.evargas.RemoteDiffTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/RemoteDiff.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/RemoteDiff";
+			};
+			name = Release;
+		};
+		AH000008 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		AH000009 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_COMPILATION_MODE = wholemodule;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		AH000001 /* Build configuration list for PBXNativeTarget "RemoteDiff" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AH000002 /* Debug */,
+				AH000003 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AH000004 /* Build configuration list for PBXNativeTarget "RemoteDiffTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AH000005 /* Debug */,
+				AH000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AH000007 /* Build configuration list for PBXProject "RemoteDiff" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AH000008 /* Debug */,
+				AH000009 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AE000001 /* Project object */;
+}
