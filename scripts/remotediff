@@ -1,0 +1,172 @@
+#!/bin/bash
+# remotediff — CLI launcher for RemoteDiff.app
+#
+# Usage:
+#   remotediff <host>:<path>                     Open a remote repo
+#   remotediff <user>@<host>:<path>              Open with explicit SSH user
+#   remotediff <host>:<path> --ref main          Specify git ref
+#   remotediff <host>:<path> --staged            Include staged changes
+#   remotediff <host>:<path> --untracked         Include untracked files
+#   remotediff <host>:<path> --ref main --staged --untracked
+#   remotediff --install                         Install this script to /usr/local/bin
+#   remotediff --help                            Show this help
+#
+# Examples:
+#   remotediff mac-studio:Development/myapp/api
+#   remotediff ernesto@mac-studio:Development/myapp/api
+#   remotediff mac-studio:Development/myapp/api --ref main --staged --untracked
+#   remotediff prod-server:~/apps/api --ref HEAD~5
+
+set -e
+
+VERSION="1.0.0"
+
+show_help() {
+    cat << 'EOF'
+RemoteDiff — View git diffs on remote machines
+
+USAGE
+    remotediff [user@]<host>:<path> [OPTIONS]
+
+ARGUMENTS
+    [user@]<host>:<path>  SSH host and repository path (required)
+                          Host must match an SSH config entry or hostname.
+                          Optionally prefix with user@ for SSH user.
+
+OPTIONS
+    --ref <ref>         Git ref for comparison (default: HEAD)
+    --staged            Include staged changes
+    --untracked         Include untracked files
+    --install           Symlink this script to /usr/local/bin/remotediff
+    --help              Show this help message
+    --version           Show version
+
+EXAMPLES
+    remotediff mac-studio:Development/myapp/api
+    remotediff ernesto@mac-studio:Development/myapp/api
+    remotediff mac-studio:~/projects/api --ref main
+    remotediff prod:apps/backend --ref HEAD~3 --staged --untracked
+EOF
+}
+
+install_cli() {
+    local target="/usr/local/bin/remotediff"
+    local source
+    source="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
+
+    if [ -L "$target" ] || [ -f "$target" ]; then
+        echo "⚠️  $target already exists."
+        read -rp "Overwrite? [y/N] " answer
+        if [[ ! "$answer" =~ ^[Yy] ]]; then
+            echo "Cancelled."
+            exit 0
+        fi
+        sudo rm -f "$target"
+    fi
+
+    sudo ln -s "$source" "$target"
+    echo "✅ Installed: $target → $source"
+    echo "   You can now use 'remotediff' from anywhere."
+}
+
+# Parse arguments
+if [ $# -eq 0 ]; then
+    show_help
+    exit 1
+fi
+
+GIT_REF="HEAD"
+STAGED="0"
+UNTRACKED="0"
+TARGET=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help|-h)
+            show_help
+            exit 0
+            ;;
+        --version|-v)
+            echo "remotediff $VERSION"
+            exit 0
+            ;;
+        --install)
+            install_cli
+            exit 0
+            ;;
+        --ref)
+            shift
+            GIT_REF="${1:?Error: --ref requires a value}"
+            ;;
+        --staged)
+            STAGED="1"
+            ;;
+        --untracked)
+            UNTRACKED="1"
+            ;;
+        -*)
+            echo "Error: Unknown option '$1'" >&2
+            echo "Run 'remotediff --help' for usage." >&2
+            exit 1
+            ;;
+        *)
+            if [ -n "$TARGET" ]; then
+                echo "Error: Multiple targets specified. Use 'remotediff <host>:<path>'." >&2
+                exit 1
+            fi
+            TARGET="$1"
+            ;;
+    esac
+    shift
+done
+
+if [ -z "$TARGET" ]; then
+    echo "Error: No target specified. Use 'remotediff <host>:<path>'." >&2
+    exit 1
+fi
+
+# Parse [user@]host:path
+if [[ "$TARGET" != *:* ]]; then
+    echo "Error: Invalid format. Use 'remotediff [user@]<host>:<path>'." >&2
+    echo "  Example: remotediff mac-studio:Development/myapp/api" >&2
+    echo "  Example: remotediff ernesto@mac-studio:Development/myapp/api" >&2
+    exit 1
+fi
+
+# Split on the FIRST colon: everything before is [user@]host, everything after is path
+HOST_PART="${TARGET%%:*}"
+REPO_PATH="${TARGET#*:}"
+
+if [ -z "$HOST_PART" ]; then
+    echo "Error: Host cannot be empty." >&2
+    exit 1
+fi
+
+if [ -z "$REPO_PATH" ]; then
+    echo "Error: Repository path cannot be empty." >&2
+    exit 1
+fi
+
+# The host part may contain user@, which SSH handles natively.
+# We pass the full user@host as the "host" parameter.
+HOST="$HOST_PART"
+
+# URL-encode values (handle spaces, special chars, @)
+urlencode() {
+    python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1], safe=''))" "$1"
+}
+
+ENCODED_HOST=$(urlencode "$HOST")
+ENCODED_PATH=$(urlencode "$REPO_PATH")
+ENCODED_REF=$(urlencode "$GIT_REF")
+
+URL="remotediff://open?host=${ENCODED_HOST}&path=${ENCODED_PATH}&ref=${ENCODED_REF}&staged=${STAGED}&untracked=${UNTRACKED}"
+
+echo "🔍 Opening RemoteDiff..."
+echo "   Host: $HOST"
+echo "   Path: $REPO_PATH"
+echo "   Ref:  $GIT_REF"
+[ "$STAGED" = "1" ] && echo "   Staged: yes"
+[ "$UNTRACKED" = "1" ] && echo "   Untracked: yes"
+
+open "$URL"
