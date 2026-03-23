@@ -6,6 +6,7 @@ struct ContentView: View {
     @StateObject private var watcher = ControlMasterWatcher()
     @StateObject private var store = ConnectionStore()
     @StateObject private var fileContentService = FileContentService()
+    @ObservedObject var themeStore: ThemeStore
 
     @State private var selectedHost = ""
     @State private var repoPath = ""
@@ -36,7 +37,7 @@ struct ContentView: View {
             .navigationSplitViewColumnWidth(min: 250, ideal: 320, max: 450)
         } detail: {
             VStack(spacing: 0) {
-                DiffView(fileDiff: selectedFileDiff, host: selectedHost, repoPath: repoPath, gitRef: gitRef, viewMode: $viewMode, fileContentService: fileContentService)
+                DiffView(fileDiff: selectedFileDiff, host: selectedHost, repoPath: repoPath, gitRef: gitRef, theme: themeStore.currentTheme, viewMode: $viewMode, fileContentService: fileContentService)
                 if isWatching || watcher.status != .idle {
                     LiveStatusBar(watcher: watcher)
                 }
