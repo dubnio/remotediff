@@ -79,12 +79,6 @@ struct CodePaneView: View {
         paraStyle.paragraphSpacingBefore = 0
 
         for (i, line) in lines.enumerated() {
-            if i > 0 {
-                result.append(NSAttributedString(string: "\n", attributes: [
-                    .font: codeFont, .paragraphStyle: paraStyle,
-                ]))
-            }
-
             let lineAttr = NSMutableAttributedString()
 
             if line.isHunkHeader {
@@ -93,8 +87,6 @@ struct CodePaneView: View {
                     .foregroundColor: nsColor(theme.hunkHeaderText),
                     .paragraphStyle: paraStyle,
                 ]))
-                lineAttr.addAttribute(.backgroundColor, value: nsColor(theme.hunkHeaderBackground),
-                                      range: NSRange(location: 0, length: lineAttr.length))
             } else {
                 // Line number
                 let numStr = line.lineNumber.map { String(format: "%4d", $0) } ?? "    "
@@ -113,12 +105,23 @@ struct CodePaneView: View {
 
                 // Syntax-highlighted code
                 appendHighlightedCode(line.text, to: lineAttr, font: codeFont, paraStyle: paraStyle)
+            }
 
-                // Per-line background for additions/deletions
-                if let bg = nsLineBackground(for: line.type) {
-                    lineAttr.addAttribute(.backgroundColor, value: bg,
-                                          range: NSRange(location: 0, length: lineAttr.length))
-                }
+            // Append newline (except last line) BEFORE applying background
+            // so the \n inherits the line's background color and eliminates gaps
+            if i < lines.count - 1 {
+                lineAttr.append(NSAttributedString(string: "\n", attributes: [
+                    .font: codeFont, .paragraphStyle: paraStyle,
+                ]))
+            }
+
+            // Apply full-line background (covers content + trailing \n)
+            if line.isHunkHeader {
+                lineAttr.addAttribute(.backgroundColor, value: nsColor(theme.hunkHeaderBackground),
+                                      range: NSRange(location: 0, length: lineAttr.length))
+            } else if let bg = nsLineBackground(for: line.type) {
+                lineAttr.addAttribute(.backgroundColor, value: bg,
+                                      range: NSRange(location: 0, length: lineAttr.length))
             }
 
             result.append(lineAttr)
@@ -195,21 +198,31 @@ private struct SelectableCodeView: NSViewRepresentable {
     let backgroundColor: NSColor
 
     func makeNSView(context: Context) -> NSTextView {
-        let textView = NSTextView()
+        // Custom layout manager that disables font leading to eliminate inter-line gaps
+        let layoutManager = NSLayoutManager()
+        layoutManager.usesFontLeading = false
+
+        let textContainer = NSTextContainer()
+        textContainer.lineFragmentPadding = 0
+        textContainer.widthTracksTextView = false
+        textContainer.containerSize = NSSize(
+            width: CGFloat.greatestFiniteMagnitude,
+            height: CGFloat.greatestFiniteMagnitude
+        )
+        layoutManager.addTextContainer(textContainer)
+
+        let textStorage = NSTextStorage()
+        textStorage.addLayoutManager(layoutManager)
+
+        let textView = NSTextView(frame: .zero, textContainer: textContainer)
         textView.isEditable = false
         textView.isSelectable = true
         textView.isRichText = true
         textView.drawsBackground = true
         textView.backgroundColor = backgroundColor
         textView.textContainerInset = NSSize(width: 4, height: 2)
-        textView.textContainer?.lineFragmentPadding = 0
 
         // No line wrapping — code extends beyond visible area, clipped by frame
-        textView.textContainer?.widthTracksTextView = false
-        textView.textContainer?.containerSize = NSSize(
-            width: CGFloat.greatestFiniteMagnitude,
-            height: CGFloat.greatestFiniteMagnitude
-        )
         textView.isHorizontallyResizable = true
         textView.isVerticallyResizable = true
         textView.maxSize = NSSize(
