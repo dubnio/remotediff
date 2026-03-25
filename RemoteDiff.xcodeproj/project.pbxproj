@@ -32,6 +32,8 @@
 		AA000027 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000027 /* SettingsView.swift */; };
 		AA000028 /* SyntaxThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000028 /* SyntaxThemeTests.swift */; };
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
+		AA000031 /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000031 /* DeepLink.swift */; };
+		AA000032 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000032 /* DeepLinkTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +73,8 @@
 		AB000027 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		AB000028 /* SyntaxThemeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SyntaxThemeTests.swift; sourceTree = "<group>"; };
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		AB000031 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
+		AB000032 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
 		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF000002 /* RemoteDiffTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RemoteDiffTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -127,6 +131,7 @@
 				AB000025 /* SyntaxTheme.swift */,
 				AB000026 /* ThemeStore.swift */,
 				AB000014 /* ConnectionStore.swift */,
+				AB000031 /* DeepLink.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -149,6 +154,7 @@
 				AB000022 /* DisplayLineBuilderTests.swift */,
 				AB000024 /* SyntaxHighlighterTests.swift */,
 				AB000028 /* SyntaxThemeTests.swift */,
+				AB000032 /* DeepLinkTests.swift */,
 			);
 			path = RemoteDiffTests;
 			sourceTree = "<group>";
@@ -293,6 +299,7 @@
 				AA000026 /* ThemeStore.swift in Sources */,
 				AA000027 /* SettingsView.swift in Sources */,
 				AA000013 /* ConnectionStore.swift in Sources */,
+				AA000031 /* DeepLink.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -305,6 +312,7 @@
 				AA000022 /* DisplayLineBuilderTests.swift in Sources */,
 				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
 				AA000028 /* SyntaxThemeTests.swift in Sources */,
+				AA000032 /* DeepLinkTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

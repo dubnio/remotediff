@@ -1,0 +1,19 @@
+#!/bin/bash
+# SSH_ASKPASS helper for RemoteDiff
+# Shows a native macOS dialog to collect SSH passwords/passphrases.
+# SSH passes the prompt (e.g. "Password:" or "Enter passphrase for key...") as $1.
+
+PROMPT="${1:-SSH Password:}"
+
+# Use osascript to show a native macOS secure input dialog
+RESULT=$(osascript -e "
+    display dialog \"$PROMPT\" default answer \"\" with hidden answer with title \"RemoteDiff — SSH Authentication\" buttons {\"Cancel\", \"OK\"} default button \"OK\" with icon caution
+    text returned of result
+" 2>/dev/null)
+
+if [ $? -ne 0 ]; then
+    # User cancelled
+    exit 1
+fi
+
+echo "$RESULT"

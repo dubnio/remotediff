@@ -106,8 +106,32 @@ class SSHService: ObservableObject {
 
     // MARK: - SSH Execution
 
+    /// Resolves the path to the bundled `remotediff-askpass` helper.
+    /// Checks the app bundle Resources first, then falls back to the scripts/ dir next to the executable.
+    static let askpassPath: String? = {
+        // 1. Inside .app bundle: Contents/Resources/remotediff-askpass
+        if let bundled = Bundle.main.path(forResource: "remotediff-askpass", ofType: nil),
+           FileManager.default.isExecutableFile(atPath: bundled) {
+            return bundled
+        }
+        // 2. Development: scripts/remotediff-askpass relative to executable
+        if let execURL = Bundle.main.executableURL {
+            let devPath = execURL
+                .deletingLastPathComponent()  // .build/debug or MacOS/
+                .deletingLastPathComponent()  // .build/ or Contents/
+                .deletingLastPathComponent()  // project root or .app
+                .appendingPathComponent("scripts/remotediff-askpass")
+                .path
+            if FileManager.default.isExecutableFile(atPath: devPath) {
+                return devPath
+            }
+        }
+        return nil
+    }()
+
     /// Runs a bash script on a remote host by piping via stdin.
     /// This avoids shell quoting issues regardless of the remote user's login shell.
+    /// Sets SSH_ASKPASS so password prompts appear as native macOS dialogs.
     static func runSSHBash(host: String, script: String,
                            extraArgs: [String] = [],
                            completion: @escaping (Result<String, Error>) -> Void) {
@@ -115,6 +139,16 @@ class SSHService: ObservableObject {
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
             process.arguments = extraArgs + [host, "bash"]
+
+            // Set up SSH_ASKPASS so SSH can show a native macOS password dialog
+            // when there's no TTY (always the case when launched via Process).
+            var env = ProcessInfo.processInfo.environment
+            if let askpass = askpassPath {
+                env["SSH_ASKPASS"] = askpass
+                env["SSH_ASKPASS_REQUIRE"] = "prefer"
+                env["DISPLAY"] = ":0"  // SSH checks this before using askpass
+            }
+            process.environment = env
 
             let inPipe = Pipe()
             let outPipe = Pipe()

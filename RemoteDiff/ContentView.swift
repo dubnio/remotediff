@@ -7,6 +7,7 @@ struct ContentView: View {
     @StateObject private var store = ConnectionStore()
     @StateObject private var fileContentService = FileContentService()
     @ObservedObject var themeStore: ThemeStore
+    @Binding var pendingDeepLink: DeepLink?
 
     @State private var selectedHost = ""
     @State private var repoPath = ""
@@ -49,6 +50,12 @@ struct ContentView: View {
         .onChange(of: selectedFileID) { _ in fetchFileContentIfNeeded() }
         .onChange(of: viewMode) { _ in fetchFileContentIfNeeded() }
         .onAppear { restoreLastSelection() }
+        .onChange(of: pendingDeepLink) { link in
+            if let link = link {
+                handleDeepLink(link)
+                pendingDeepLink = nil
+            }
+        }
         .background {
             Button("") { navigateFile(direction: -1) }
                 .keyboardShortcut("[", modifiers: .command)
@@ -112,6 +119,71 @@ struct ContentView: View {
     private func persistSelection(_ sel: RepoSelection?) {
         UserDefaults.standard.set(sel?.connectionID.uuidString, forKey: "lastConnectionID")
         UserDefaults.standard.set(sel?.repositoryID.uuidString, forKey: "lastRepoID")
+    }
+
+    private func handleDeepLink(_ link: DeepLink) {
+        // Look for an existing connection+repo matching this deep link
+        var matchedConnection: SavedConnection?
+        var matchedRepo: SavedRepository?
+
+        for conn in store.connections {
+            if conn.host == link.host {
+                if let repo = conn.repositories.first(where: { $0.repoPath == link.repoPath }) {
+                    matchedConnection = conn
+                    matchedRepo = repo
+                    break
+                }
+                // Same host but different repo — remember the connection
+                if matchedConnection == nil { matchedConnection = conn }
+            }
+        }
+
+        // If no exact match, create connection + repo
+        if matchedRepo == nil {
+            if matchedConnection == nil {
+                // Derive a friendly name from the host
+                matchedConnection = store.addConnection(name: link.host, host: link.host)
+            }
+
+            // Derive repo name from the last path component
+            let repoName = (link.repoPath as NSString).lastPathComponent
+            matchedRepo = store.addRepository(
+                to: matchedConnection!.id,
+                name: repoName.isEmpty ? "Repository" : repoName,
+                repoPath: link.repoPath,
+                gitRef: link.gitRef
+            )
+
+            // Update flags
+            if var repo = matchedRepo {
+                repo.includeStaged = link.includeStaged
+                repo.includeUntracked = link.includeUntracked
+                store.updateRepository(repo, in: matchedConnection!.id)
+                matchedRepo = repo
+            }
+        }
+
+        guard let conn = matchedConnection ?? store.connection(for: matchedConnection!.id),
+              let repo = matchedRepo else { return }
+
+        // Save current results before switching
+        if let prev = selection {
+            sshService.saveToCache(repoID: prev.repositoryID, selectedFileID: selectedFileID)
+        }
+
+        // Select and load
+        selection = RepoSelection(connectionID: conn.id, repositoryID: repo.id)
+        selectedHost = conn.host
+        repoPath = repo.repoPath
+        gitRef = repo.gitRef
+        includeStaged = repo.includeStaged
+        includeUntracked = repo.includeUntracked
+
+        // Immediately fetch the diff
+        fetchAndCache()
+
+        // Bring the app to front
+        NSApplication.shared.activate(ignoringOtherApps: true)
     }
 
     private func restoreLastSelection() {

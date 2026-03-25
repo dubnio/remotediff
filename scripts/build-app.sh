@@ -73,6 +73,17 @@ cat > "$APP_BUNDLE/Contents/Info.plist" << EOF
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>Copyright © 2026. All rights reserved.</string>
+    <key>CFBundleURLTypes</key>
+    <array>
+        <dict>
+            <key>CFBundleURLName</key>
+            <string>com.evargas.RemoteDiff</string>
+            <key>CFBundleURLSchemes</key>
+            <array>
+                <string>remotediff</string>
+            </array>
+        </dict>
+    </array>
 </dict>
 </plist>
 EOF
@@ -80,7 +91,15 @@ EOF
 # Create PkgInfo
 echo -n "APPL????" > "$APP_BUNDLE/Contents/PkgInfo"
 
+# Bundle CLI tool and askpass helper
+echo "🔧 Bundling CLI tool..."
+cp "scripts/remotediff" "$APP_BUNDLE/Contents/Resources/remotediff"
+chmod +x "$APP_BUNDLE/Contents/Resources/remotediff"
+cp "scripts/remotediff-askpass" "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
+chmod +x "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
+
 echo "✅ App bundle created: $APP_BUNDLE"
+echo "💡 To install the CLI: $APP_BUNDLE/Contents/Resources/remotediff --install"
 
 # Optionally create a DMG
 if command -v create-dmg &> /dev/null; then
