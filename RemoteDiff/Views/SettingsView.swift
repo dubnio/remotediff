@@ -11,6 +11,11 @@ struct SettingsView: View {
                 .tabItem {
                     Label("Appearance", systemImage: "paintbrush")
                 }
+
+            KeyboardShortcutsView()
+                .tabItem {
+                    Label("Shortcuts", systemImage: "keyboard")
+                }
         }
         .frame(width: 580, height: 460)
     }
@@ -186,5 +191,108 @@ struct ThemePreview: View {
             result = result + Text(str).foregroundColor(theme.color(for: kind).color)
         }
         return result
+    }
+}
+
+// MARK: - Keyboard Shortcuts View
+
+struct KeyboardShortcutsView: View {
+    private struct ShortcutEntry: Identifiable {
+        let id = UUID()
+        let keys: String
+        let description: String
+    }
+
+    private struct ShortcutGroup: Identifiable {
+        let id = UUID()
+        let title: String
+        let icon: String
+        let shortcuts: [ShortcutEntry]
+    }
+
+    private let groups: [ShortcutGroup] = [
+        ShortcutGroup(title: "Navigation", icon: "arrow.up.arrow.down", shortcuts: [
+            ShortcutEntry(keys: "⌘ ↑", description: "Jump to previous change"),
+            ShortcutEntry(keys: "⌘ ↓", description: "Jump to next change"),
+            ShortcutEntry(keys: "⌘ [", description: "Previous file"),
+            ShortcutEntry(keys: "⌘ ]", description: "Next file"),
+        ]),
+        ShortcutGroup(title: "Actions", icon: "bolt.fill", shortcuts: [
+            ShortcutEntry(keys: "⌘ R", description: "Fetch diff"),
+            ShortcutEntry(keys: "⌘ ,", description: "Open Settings"),
+        ]),
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack {
+                Text("Keyboard Shortcuts")
+                    .font(.headline)
+                Spacer()
+            }
+            .padding(.horizontal)
+            .padding(.top, 16)
+            .padding(.bottom, 12)
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    ForEach(groups) { group in
+                        shortcutGroup(group)
+                    }
+                }
+                .padding(.horizontal)
+                .padding(.bottom, 16)
+            }
+
+            Spacer()
+        }
+    }
+
+    @ViewBuilder
+    private func shortcutGroup(_ group: ShortcutGroup) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label(group.title, systemImage: group.icon)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.secondary)
+
+            VStack(spacing: 0) {
+                ForEach(Array(group.shortcuts.enumerated()), id: \.element.id) { index, shortcut in
+                    HStack {
+                        Text(shortcut.description)
+                            .font(.system(.body))
+
+                        Spacer()
+
+                        Text(shortcut.keys)
+                            .font(.system(.body, design: .rounded).weight(.medium))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .fill(Color.secondary.opacity(0.1))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+                            )
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+
+                    if index < group.shortcuts.count - 1 {
+                        Divider().padding(.leading, 12)
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color(nsColor: .controlBackgroundColor))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 8)
+                    .strokeBorder(Color.secondary.opacity(0.15), lineWidth: 1)
+            )
+        }
     }
 }

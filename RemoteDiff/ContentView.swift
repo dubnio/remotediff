@@ -83,11 +83,17 @@ struct ContentView: View {
         let previousName = selectedFileDiff?.displayName
         let repoID = selection?.repositoryID
 
+        // Invalidate file content so it will be re-fetched after diff completes
+        fileContentService.invalidate()
+
         sshService.fetchDiff(host: selectedHost, repoPath: repoPath, gitRef: gitRef,
                              includeStaged: includeStaged, includeUntracked: includeUntracked) {
             selectedFileID = sshService.fileDiffs.first(where: { $0.displayName == previousName })?.id
                 ?? sshService.fileDiffs.first?.id
             if let repoID { sshService.saveToCache(repoID: repoID, selectedFileID: selectedFileID) }
+
+            // Re-fetch file content for Side-by-Side / Full File modes
+            fetchFileContentIfNeeded()
         }
     }
 

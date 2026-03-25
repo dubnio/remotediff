@@ -130,11 +130,15 @@ struct DiffView: View {
     private func fullFileContent(_ fileDiff: FileDiff) -> some View {
         let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
+        let inlineMaps = DisplayLineBuilder.inlineRangesMap(fileDiff: fileDiff)
+        let delMarkers = DisplayLineBuilder.deletionMarkerPositions(fileDiff: fileDiff)
         let lines = DisplayLineBuilder.buildFullFileLines(
-            content: fileContentService.newContent ?? "", changedLines: addedLines
+            content: fileContentService.newContent ?? "", changedLines: addedLines,
+            inlineRangesMap: inlineMaps.new
         )
         scrollableContent {
-            CodePaneView(lines: lines, language: lang, theme: theme)
+            CodePaneView(lines: lines, language: lang, theme: theme,
+                         deletionMarkerAfterLines: delMarkers)
         }
     }
 
@@ -143,13 +147,19 @@ struct DiffView: View {
         let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let deletedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .deletion)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
+        let inlineMaps = DisplayLineBuilder.inlineRangesMap(fileDiff: fileDiff)
+        let delMarkers = DisplayLineBuilder.deletionMarkerPositions(fileDiff: fileDiff)
         let oldLines = DisplayLineBuilder.buildFullFileLines(
-            content: fileContentService.oldContent ?? "", changedLines: deletedLines
+            content: fileContentService.oldContent ?? "", changedLines: deletedLines,
+            highlightType: .deletion, inlineRangesMap: inlineMaps.old
         )
         let newLines = DisplayLineBuilder.buildFullFileLines(
-            content: fileContentService.newContent ?? "", changedLines: addedLines
+            content: fileContentService.newContent ?? "", changedLines: addedLines,
+            highlightType: .addition, inlineRangesMap: inlineMaps.new
         )
-        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New", language: lang, theme: theme)
+        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New",
+                       language: lang, theme: theme,
+                       rightDeletionMarkers: delMarkers)
     }
 
     // MARK: - Scrollable Content Helpers
@@ -173,7 +183,8 @@ struct DiffView: View {
         left: [DisplayLine], right: [DisplayLine],
         leftLabel: String? = nil, rightLabel: String? = nil,
         language: LanguageConfig? = nil,
-        theme: SyntaxTheme = .xcodeDefault
+        theme: SyntaxTheme = .xcodeDefault,
+        rightDeletionMarkers: Set<Int> = []
     ) -> some View {
         GeometryReader { geo in
             scrollableContent {
@@ -185,7 +196,8 @@ struct DiffView: View {
                         .fill(Color.secondary.opacity(0.2))
                         .frame(width: 1)
 
-                    CodePaneView(lines: right, label: rightLabel, language: language, theme: theme)
+                    CodePaneView(lines: right, label: rightLabel, language: language, theme: theme,
+                                 deletionMarkerAfterLines: rightDeletionMarkers)
                         .frame(width: geo.size.width / 2)
                 }
             }
