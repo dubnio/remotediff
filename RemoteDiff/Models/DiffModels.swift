@@ -35,11 +35,20 @@ struct DiffHunk: Identifiable, Equatable {
 // MARK: - FileDiff
 
 struct FileDiff: Identifiable, Equatable {
-    let id = UUID()
+    /// Deterministic ID based on file paths — same file keeps the same identity across refreshes.
+    let id: String
     let oldPath: String
     let newPath: String
     let isBinary: Bool
     let hunks: [DiffHunk]
+
+    init(oldPath: String, newPath: String, isBinary: Bool, hunks: [DiffHunk]) {
+        self.id = "\(oldPath):\(newPath)"
+        self.oldPath = oldPath
+        self.newPath = newPath
+        self.isBinary = isBinary
+        self.hunks = hunks
+    }
 
     var displayName: String {
         if oldPath == newPath || oldPath == "/dev/null" { return newPath }

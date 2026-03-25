@@ -112,6 +112,8 @@ final class SyntaxThemeTests: XCTestCase {
             XCTAssertFalse(theme.gutterText.hex.isEmpty, "\(theme.id) missing gutterText")
             XCTAssertFalse(theme.additionBackground.hex.isEmpty, "\(theme.id) missing additionBackground")
             XCTAssertFalse(theme.deletionBackground.hex.isEmpty, "\(theme.id) missing deletionBackground")
+            XCTAssertFalse(theme.inlineAdditionBackground.hex.isEmpty, "\(theme.id) missing inlineAdditionBackground")
+            XCTAssertFalse(theme.inlineDeletionBackground.hex.isEmpty, "\(theme.id) missing inlineDeletionBackground")
         }
     }
 

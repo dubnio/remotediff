@@ -6,7 +6,14 @@ class FileContentService: ObservableObject {
     @Published var oldContent: String?
     @Published var newContent: String?
     @Published var loadError: String?
-    private(set) var lastFileID: UUID?
+    private(set) var lastFileID: String?
+
+    /// Invalidates cached content so the next `fetchFor` will re-fetch.
+    /// Does NOT show a loading spinner or clear existing content — the old content
+    /// remains visible until the fresh fetch completes (seamless refresh).
+    func invalidate() {
+        lastFileID = nil
+    }
 
     /// Fetches content for the given file. Skips if already loaded for same file.
     func fetchFor(fileDiff: FileDiff, host: String, repoPath: String, gitRef: String) {
@@ -14,12 +21,17 @@ class FileContentService: ObservableObject {
         if lastFileID == fileDiff.id && (newContent != nil || loadError != nil) { return }
         if lastFileID == fileDiff.id && isLoading { return }
 
+        // Same file being refreshed (invalidated) — keep old content visible while fetching
+        let isRefresh = (newContent != nil || oldContent != nil) && lastFileID == nil
+
         // New file — reset and fetch
         lastFileID = fileDiff.id
-        oldContent = nil
-        newContent = nil
+        if !isRefresh {
+            oldContent = nil
+            newContent = nil
+        }
         loadError = nil
-        isLoading = true
+        isLoading = !isRefresh  // Don't show spinner for refreshes
 
         guard !host.isEmpty && !repoPath.isEmpty else {
             isLoading = false

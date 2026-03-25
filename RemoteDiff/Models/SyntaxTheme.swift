@@ -58,6 +58,8 @@ struct SyntaxTheme: Identifiable, Equatable {
     let gutterText: HexColor
     let additionBackground: HexColor
     let deletionBackground: HexColor
+    let inlineAdditionBackground: HexColor
+    let inlineDeletionBackground: HexColor
     let hunkHeaderBackground: HexColor
     let hunkHeaderText: HexColor
 
@@ -119,6 +121,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#A0A0A0"),
         additionBackground:  HexColor("#E6FFEC"),
         deletionBackground:  HexColor("#FFEBE9"),
+        inlineAdditionBackground: HexColor("#ACF2BD"),
+        inlineDeletionBackground: HexColor("#FDB8C0"),
         hunkHeaderBackground: HexColor("#F0F4FF"),
         hunkHeaderText:      HexColor("#6E7781")
     )
@@ -140,6 +144,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#90908A"),
         additionBackground:  HexColor("#2EA04326"),
         deletionBackground:  HexColor("#F8514926"),
+        inlineAdditionBackground: HexColor("#2EA04380"),
+        inlineDeletionBackground: HexColor("#F8514980"),
         hunkHeaderBackground: HexColor("#3E3D32"),
         hunkHeaderText:      HexColor("#90908A")
     )
@@ -161,6 +167,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#636D83"),
         additionBackground:  HexColor("#2EA04326"),
         deletionBackground:  HexColor("#F8514926"),
+        inlineAdditionBackground: HexColor("#2EA04380"),
+        inlineDeletionBackground: HexColor("#F8514980"),
         hunkHeaderBackground: HexColor("#2C313C"),
         hunkHeaderText:      HexColor("#636D83")
     )
@@ -182,6 +190,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#6272A4"),
         additionBackground:  HexColor("#50FA7B26"),
         deletionBackground:  HexColor("#FF555526"),
+        inlineAdditionBackground: HexColor("#50FA7B80"),
+        inlineDeletionBackground: HexColor("#FF555580"),
         hunkHeaderBackground: HexColor("#343746"),
         hunkHeaderText:      HexColor("#6272A4")
     )
@@ -203,6 +213,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#586E75"),
         additionBackground:  HexColor("#859900"),
         deletionBackground:  HexColor("#DC322F26"),
+        inlineAdditionBackground: HexColor("#85990080"),
+        inlineDeletionBackground: HexColor("#DC322F80"),
         hunkHeaderBackground: HexColor("#073642"),
         hunkHeaderText:      HexColor("#586E75")
     )
@@ -224,6 +236,8 @@ extension SyntaxTheme {
         gutterText:          HexColor("#8C959F"),
         additionBackground:  HexColor("#DAFBE1"),
         deletionBackground:  HexColor("#FFEBE9"),
+        inlineAdditionBackground: HexColor("#ACF2BD"),
+        inlineDeletionBackground: HexColor("#FDB8C0"),
         hunkHeaderBackground: HexColor("#DDF4FF"),
         hunkHeaderText:      HexColor("#6E7781")
     )

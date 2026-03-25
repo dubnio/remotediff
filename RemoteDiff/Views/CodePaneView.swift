@@ -20,13 +20,17 @@ struct CodePaneView: View {
     let label: String?
     let language: LanguageConfig?
     let theme: SyntaxTheme
+    /// Line numbers after which a thin deletion marker line should be drawn.
+    /// Used in Side by Side / Full File modes to show where content was removed.
+    let deletionMarkerAfterLines: Set<Int>
 
     init(lines: [DisplayLine], label: String? = nil, language: LanguageConfig? = nil,
-         theme: SyntaxTheme = .xcodeDefault) {
+         theme: SyntaxTheme = .xcodeDefault, deletionMarkerAfterLines: Set<Int> = []) {
         self.lines = lines
         self.label = label
         self.language = language
         self.theme = theme
+        self.deletionMarkerAfterLines = deletionMarkerAfterLines
     }
 
     var body: some View {
@@ -60,8 +64,35 @@ struct CodePaneView: View {
                 }
                 .padding(.top, 2) // match textContainerInset
                 .allowsHitTesting(false)
+
+                // Deletion marker lines — thin red lines showing where content was removed
+                if !deletionMarkerAfterLines.isEmpty {
+                    deletionMarkers
+                }
             }
         }
+    }
+
+    /// Thin red horizontal lines drawn after specific source lines to indicate removed content.
+    private var deletionMarkers: some View {
+        let markerColor = Color(nsColor: nsColor(theme.deletionBackground))
+        // Build Y offsets: textContainerInset (2pt) + lineNumber * lineHeight
+        let offsets: [CGFloat] = deletionMarkerAfterLines.sorted().compactMap { lineNum in
+            // lineNum is 1-indexed source line; find its display index
+            guard let idx = lines.firstIndex(where: { $0.lineNumber == lineNum }) else {
+                // lineNum == 0 means "before the first line"
+                if lineNum == 0 { return CGFloat(2) }
+                return nil
+            }
+            return CGFloat(2) + CGFloat(idx + 1) * codeLineHeight
+        }
+        return ForEach(offsets, id: \.self) { y in
+            Rectangle()
+                .fill(markerColor)
+                .frame(height: 2)
+                .offset(y: y - 1) // center the 2px line on the boundary
+        }
+        .allowsHitTesting(false)
     }
 
     // MARK: - Attributed String Builder
@@ -96,8 +127,9 @@ struct CodePaneView: View {
                     .paragraphStyle: paraStyle,
                 ]))
 
-                // Indicator
-                lineAttr.append(NSAttributedString(string: indicator(for: line.type) + " ", attributes: [
+                // Indicator (use ~ for modified lines with inline changes)
+                let ind = !line.inlineRanges.isEmpty ? "~" : indicator(for: line.type)
+                lineAttr.append(NSAttributedString(string: ind + " ", attributes: [
                     .font: gutterFont,
                     .foregroundColor: nsIndicatorColor(for: line.type),
                     .paragraphStyle: paraStyle,
@@ -122,6 +154,21 @@ struct CodePaneView: View {
             } else if let bg = nsLineBackground(for: line.type) {
                 lineAttr.addAttribute(.backgroundColor, value: bg,
                                       range: NSRange(location: 0, length: lineAttr.length))
+            }
+
+            // Apply inline change highlights on top of line background
+            if !line.inlineRanges.isEmpty && !line.isHunkHeader {
+                let inlineBg = line.type == .deletion
+                    ? nsColor(theme.inlineDeletionBackground)
+                    : nsColor(theme.inlineAdditionBackground)
+                // Gutter prefix: "NNNN " (5) + "~ " (2) = 7 characters
+                let gutterLen = 7
+                for range in line.inlineRanges {
+                    let adjusted = NSRange(location: range.location + gutterLen, length: range.length)
+                    if adjusted.location + adjusted.length <= lineAttr.length {
+                        lineAttr.addAttribute(.backgroundColor, value: inlineBg, range: adjusted)
+                    }
+                }
             }
 
             result.append(lineAttr)
@@ -234,7 +281,9 @@ private struct SelectableCodeView: NSViewRepresentable {
     }
 
     func updateNSView(_ textView: NSTextView, context: Context) {
-        // Only update text storage when content actually changed
+        // Only update text storage when content actually changed.
+        // Since the NSTextView lives inside a SwiftUI ScrollView (not NSScrollView),
+        // scroll position is preserved at the SwiftUI level as long as view identity is stable.
         if textView.string != attributedString.string {
             textView.textStorage?.setAttributedString(attributedString)
         }
