@@ -3,7 +3,7 @@ set -e
 
 APP_NAME="RemoteDiff"
 BUNDLE_ID="com.evargas.RemoteDiff"
-VERSION="1.0.0"
+VERSION="1.0.1"
 BUILD_DIR=".build/release"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 
@@ -98,6 +98,10 @@ chmod +x "$APP_BUNDLE/Contents/Resources/remotediff"
 cp "scripts/remotediff-askpass" "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
 chmod +x "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
 
+# Ad-hoc code sign (must be AFTER all files are in the bundle)
+echo "🔏 Code signing..."
+codesign --force --deep --sign - "$APP_BUNDLE"
+
 echo "✅ App bundle created: $APP_BUNDLE"
 echo "💡 To install the CLI: $APP_BUNDLE/Contents/Resources/remotediff --install"
 
@@ -129,6 +133,10 @@ if command -v create-dmg &> /dev/null; then
 
     create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_BUNDLE"
     echo "✅ DMG created: $DMG_PATH"
+    echo ""
+    echo "⚠️  This app is ad-hoc signed (no Apple Developer ID)."
+    echo "   If macOS says it's damaged, the recipient should run:"
+    echo "   xattr -cr /Applications/RemoteDiff.app"
 else
     echo "⚠️  'create-dmg' not found. Install with: brew install create-dmg"
     echo "📀 Creating ZIP instead..."
@@ -136,4 +144,8 @@ else
     rm -f "$ZIP_PATH"
     cd "$BUILD_DIR" && zip -r -y "$APP_NAME-$VERSION.zip" "$APP_NAME.app"
     echo "✅ ZIP created: $BUILD_DIR/$APP_NAME-$VERSION.zip"
+    echo ""
+    echo "⚠️  This app is ad-hoc signed (no Apple Developer ID)."
+    echo "   If macOS says it's damaged, the recipient should run:"
+    echo "   xattr -cr /Applications/RemoteDiff.app"
 fi
