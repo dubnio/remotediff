@@ -101,22 +101,37 @@ chmod +x "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
 echo "✅ App bundle created: $APP_BUNDLE"
 echo "💡 To install the CLI: $APP_BUNDLE/Contents/Resources/remotediff --install"
 
-# Optionally create a DMG
+# Create DMG with drag-to-Applications installer
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+DMG_BG="$SCRIPT_DIR/dmg-resources/dmg-background.png"
+
 if command -v create-dmg &> /dev/null; then
     echo "📀 Creating DMG..."
     DMG_PATH="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
     rm -f "$DMG_PATH"
-    create-dmg \
-        --volname "$APP_NAME" \
-        --window-size 500 300 \
-        --icon "$APP_NAME.app" 150 150 \
-        --app-drop-link 350 150 \
-        "$DMG_PATH" \
-        "$APP_BUNDLE"
+
+    DMG_ARGS=(
+        --volname "$APP_NAME"
+        --volicon "$APP_BUNDLE/Contents/Resources/AppIcon.icns"
+        --window-pos 200 120
+        --window-size 660 400
+        --icon-size 80
+        --icon "$APP_NAME.app" 165 180
+        --app-drop-link 495 180
+        --hide-extension "$APP_NAME.app"
+        --no-internet-enable
+    )
+
+    # Add background image if it exists
+    if [ -f "$DMG_BG" ]; then
+        DMG_ARGS+=(--background "$DMG_BG")
+    fi
+
+    create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_BUNDLE"
     echo "✅ DMG created: $DMG_PATH"
 else
-    # Create a simple zip instead
-    echo "📀 Creating ZIP..."
+    echo "⚠️  'create-dmg' not found. Install with: brew install create-dmg"
+    echo "📀 Creating ZIP instead..."
     ZIP_PATH="$BUILD_DIR/$APP_NAME-$VERSION.zip"
     rm -f "$ZIP_PATH"
     cd "$BUILD_DIR" && zip -r -y "$APP_NAME-$VERSION.zip" "$APP_NAME.app"

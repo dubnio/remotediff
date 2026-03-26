@@ -7,10 +7,12 @@ Project guidelines for AI assistants working on RemoteDiff.
 ```bash
 swift build          # Build the project
 swift test           # Run all tests (121 tests across 7 suites)
-./scripts/build-app.sh  # Build distributable .app bundle + .zip
+./scripts/build-app.sh  # Build .app bundle + DMG installer (or .zip fallback)
 ```
 
 SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when adding/removing/renaming Swift files, update the pbxproj too.
+
+**Distribution**: `build-app.sh` produces a DMG at `.build/release/RemoteDiff-<version>.dmg` with the classic drag-to-Applications installer (app icon + arrow + Applications symlink). Requires `create-dmg` (`brew install create-dmg`); falls back to `.zip` if not installed. Background image is at `scripts/dmg-resources/dmg-background.png` (regenerate with `python3 scripts/create-dmg-background.py`).
 
 ## Architecture
 
@@ -29,7 +31,7 @@ SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when
 | `RemoteDiff/Services/` | SSH execution, diff caching, file content fetching, watcher |
 | `RemoteDiff/Views/` | All SwiftUI views + language configs |
 | `RemoteDiffTests/` | Unit tests |
-| `scripts/` | Build script (`build-app.sh`) and CLI launcher (`remotediff`) |
+| `scripts/` | Build script (`build-app.sh`), CLI launcher (`remotediff`), DMG resources |
 
 ## Data Model
 
