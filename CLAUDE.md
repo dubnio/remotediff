@@ -6,7 +6,7 @@ Project guidelines for AI assistants working on RemoteDiff.
 
 ```bash
 swift build          # Build the project
-swift test           # Run all tests (121 tests across 7 suites)
+swift test           # Run all tests (165 tests across 7 suites)
 ./scripts/build-app.sh  # Build .app bundle + DMG installer (or .zip fallback)
 ```
 
@@ -99,20 +99,25 @@ All dual-pane modes use `dualPaneScroll()` (shared `ScrollView` via `GeometryRea
 | Mode | Data Source | Rendering |
 |------|------------|-----------|
 | **Diff** | `SSHService.fileDiffs` → `DisplayLineBuilder.buildDiffLines()` | `dualPaneScroll` (left/right) |
-| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` | `dualPaneScroll` with Old/New labels |
-| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` | `scrollableContent` (single pane) |
+| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` (with `modifiedLines`) + `ConnectorLink.compute()` | `dualPaneScroll` with Old/New labels and `ConnectorRibbonsView` in the gap |
+| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` (with `modifiedLines`) | `scrollableContent` (single pane) |
+
+**Side-by-Side connector ribbons.** Each pane renders its own raw, unpadded full-file content (different line counts on each side). `ConnectorLink.compute(fileDiff:)` walks the unified diff and produces, for each contiguous deletion/addition cluster, a link with **separate old-line and new-line ranges**. `ConnectorRibbonsView` (canvas-based) draws cubic Bézier ribbons connecting those Y ranges in the 28 px gap between panes — wedge-shaped for pure adds/dels, trapezoidal for modifications. Width is an explicit parameter; height equals the taller pane.
+
+**Modification highlighting.** `DiffLineType` includes a display-only `.modification` case used by `buildFullFileLines` when a line number is in the `modifiedLines` set (computed via `DisplayLineBuilder.modifiedLineNumbers(fileDiff:side:)`). Themes carry a `modificationBackground` + `inlineModificationBackground` (typically blue) so modification rows render visually distinct from pure adds (green) / dels (red). Indicator glyph is `~`.
 
 ## Testing
 
-Tests in `RemoteDiffTests/`:
+Tests in `RemoteDiffTests/` (165 total across 7 suites):
 - `DiffParserTests` — 19 tests for unified diff parsing including untracked files
-- `DisplayLineBuilderTests` — 30 tests for display line building, inline ranges, deletion markers, hunk formatting
+- `DisplayLineBuilderTests` — 61 tests covering: display line building, inline ranges, deletion markers, hunk formatting, aligned side-by-side, `ChangeRegion.compute`, `ConnectorLink.compute` (incl. interleaved del/add collapse), `modifiedLineNumbers`, and `buildFullFileLines` modified-lines precedence
 - `SSHConfigTests` — 5 tests for SSH config parsing
-- `SyntaxHighlighterTests` — 32 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, edge cases)
+- `SyntaxHighlighterTests` — 39 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, **Python triple-quoted strings with multi-line state**, edge cases)
 - `SyntaxThemeTests` — 22 tests for theme registry, hex color parsing, built-in theme validation, dark/light classification
 - `DeepLinkTests` — 13 tests for URL scheme parsing, user@host format, edge cases, invalid inputs
+- `FileGroupTests` — 6 tests for sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
 
-Run `swift test` after modifying `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, or `DeepLink`.
+Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, or the `FileGroup` model in `SidebarView.swift`.
 
 ## SSH Authentication
 
