@@ -24,6 +24,147 @@ struct DisplayLine: Identifiable, Equatable {
     }
 }
 
+// MARK: - Connector Link
+
+/// A single change in a unified diff, expressed as **two separate line ranges**
+/// — one in the old file and one in the new file. Used by the connector ribbon
+/// view to draw cubic Bézier curves between the two unaligned panes of a
+/// side-by-side diff.
+///
+/// Both ranges are 1-based and use exclusive end. Either range may be empty
+/// (start == end) for pure additions or pure deletions — in that case the
+/// ribbon collapses to a point on that side, producing a wedge shape.
+struct ConnectorLink: Equatable {
+    enum Kind: Equatable {
+        case addition       // pure addition: oldStartLine == oldEndLine
+        case deletion       // pure deletion: newStartLine == newEndLine
+        case modification   // both ranges non-empty (deletions paired with additions)
+    }
+    let oldStartLine: Int
+    let oldEndLine: Int     // exclusive
+    let newStartLine: Int
+    let newEndLine: Int     // exclusive
+    let kind: Kind
+
+    /// Number of old-file lines this link covers (0 for pure additions).
+    var oldRowCount: Int { oldEndLine - oldStartLine }
+    /// Number of new-file lines this link covers (0 for pure deletions).
+    var newRowCount: Int { newEndLine - newStartLine }
+
+    /// Walks each hunk in `fileDiff`, grouping consecutive deletion/addition runs
+    /// into a single link. Pure deletions and pure additions get a collapsed
+    /// (zero-width) range on the opposite side.
+    static func compute(fileDiff: FileDiff) -> [ConnectorLink] {
+        var links: [ConnectorLink] = []
+        for hunk in fileDiff.hunks {
+            var oldLine = hunk.leftStartLine
+            var newLine = hunk.rightStartLine
+            var i = 0
+            let lines = hunk.lines
+            while i < lines.count {
+                switch lines[i].type {
+                case .context:
+                    oldLine += 1
+                    newLine += 1
+                    i += 1
+
+                case .deletion, .addition:
+                    let oldStart = oldLine
+                    let newStart = newLine
+                    // Collapse a single contiguous run of deletions and additions
+                    // (in any order, possibly interleaved) into one link, so the
+                    // connector renders as a single ribbon for the whole edit.
+                    while i < lines.count {
+                        switch lines[i].type {
+                        case .deletion: oldLine += 1; i += 1
+                        case .addition: newLine += 1; i += 1
+                        default:        break
+                        }
+                        if i < lines.count, lines[i].type != .deletion, lines[i].type != .addition {
+                            break
+                        }
+                        if i >= lines.count { break }
+                    }
+                    let hasDel = oldLine > oldStart
+                    let hasAdd = newLine > newStart
+                    let kind: Kind
+                    if hasDel && hasAdd { kind = .modification }
+                    else if hasAdd      { kind = .addition }
+                    else                { kind = .deletion }
+                    links.append(ConnectorLink(
+                        oldStartLine: oldStart, oldEndLine: oldLine,
+                        newStartLine: newStart, newEndLine: newLine,
+                        kind: kind
+                    ))
+
+                case .empty, .modification:
+                    // Display-only types — not produced by the diff parser.
+                    i += 1
+                }
+            }
+        }
+        return links
+    }
+}
+
+// MARK: - Change Region
+
+/// A contiguous run of rows in an aligned side-by-side view where at least one
+/// side has a change (addition, deletion, or modification). Used by the
+/// connector ribbon view to render colored Bezier bands across the gap.
+struct ChangeRegion: Equatable {
+    enum Kind: Equatable {
+        case addition       // new-only — left side is empty/padding
+        case deletion       // old-only — right side is empty/padding
+        case modification   // both sides have content (deletion paired with addition)
+    }
+    let startRow: Int   // inclusive 0-based row index in the aligned arrays
+    let endRow: Int     // inclusive 0-based row index in the aligned arrays
+    let kind: Kind
+
+    /// Number of rows the region spans.
+    var rowCount: Int { endRow - startRow + 1 }
+
+    /// Computes contiguous change regions from a pair of aligned `[DisplayLine]`
+    /// arrays produced by `DisplayLineBuilder.buildSideBySideLines(…)`.
+    /// Hunk-header rows act as natural separators between regions.
+    static func compute(left: [DisplayLine], right: [DisplayLine]) -> [ChangeRegion] {
+        guard left.count == right.count, !left.isEmpty else { return [] }
+
+        var regions: [ChangeRegion] = []
+        var i = 0
+        while i < left.count {
+            let l = left[i], r = right[i]
+            // Skip rows that are pure context on both sides or hunk headers.
+            if (l.type == .context && r.type == .context) || l.isHunkHeader || r.isHunkHeader {
+                i += 1
+                continue
+            }
+
+            // Start of a change region — advance until we hit context-on-both / a header / end.
+            let start = i
+            var hasDeletion = false
+            var hasAddition = false
+            while i < left.count {
+                let li = left[i], ri = right[i]
+                if (li.type == .context && ri.type == .context) || li.isHunkHeader || ri.isHunkHeader {
+                    break
+                }
+                if li.type == .deletion { hasDeletion = true }
+                if ri.type == .addition { hasAddition = true }
+                i += 1
+            }
+            let end = i - 1
+            let kind: Kind
+            if hasDeletion && hasAddition { kind = .modification }
+            else if hasAddition           { kind = .addition }
+            else                          { kind = .deletion }
+            regions.append(ChangeRegion(startRow: start, endRow: end, kind: kind))
+        }
+        return regions
+    }
+}
+
 // MARK: - Display Line Builder
 
 enum DisplayLineBuilder {
@@ -107,14 +248,24 @@ enum DisplayLineBuilder {
 
     /// Builds display lines for a full file view, highlighting changed lines.
     /// - `highlightType`: the diff type for changed lines (`.addition` for new file, `.deletion` for old file)
+    /// - `modifiedLines`: line numbers that are part of a modification pair — these
+    ///   are tagged `.modification` (rendered blue) instead of `highlightType`.
     /// - `inlineRangesMap`: optional per-line inline highlight ranges (line number → ranges)
     static func buildFullFileLines(content: String, changedLines: Set<Int>,
                                    highlightType: DiffLineType = .addition,
+                                   modifiedLines: Set<Int> = [],
                                    inlineRangesMap: [Int: [NSRange]] = [:]) -> [DisplayLine] {
         let lines = content.components(separatedBy: "\n")
         return lines.enumerated().map { index, text in
             let lineNum = index + 1
-            let type: DiffLineType = changedLines.contains(lineNum) ? highlightType : .context
+            let type: DiffLineType
+            if modifiedLines.contains(lineNum) {
+                type = .modification
+            } else if changedLines.contains(lineNum) {
+                type = highlightType
+            } else {
+                type = .context
+            }
             return DisplayLine(
                 id: "file-\(lineNum)",
                 lineNumber: lineNum,
@@ -123,6 +274,164 @@ enum DisplayLineBuilder {
                 inlineRanges: inlineRangesMap[lineNum] ?? []
             )
         }
+    }
+
+    /// Returns the set of line numbers (per side) that are part of a modification
+    /// pair — i.e. live within a `ConnectorLink` whose kind is `.modification`.
+    /// Used by `buildFullFileLines` to render those lines with the
+    /// `.modification` (blue) background instead of pure add/del red/green.
+    static func modifiedLineNumbers(fileDiff: FileDiff, side: Side) -> Set<Int> {
+        var modified = Set<Int>()
+        for link in ConnectorLink.compute(fileDiff: fileDiff) where link.kind == .modification {
+            let range: Range<Int>
+            switch side {
+            case .left:  range = link.oldStartLine..<link.oldEndLine
+            case .right: range = link.newStartLine..<link.newEndLine
+            }
+            for n in range { modified.insert(n) }
+        }
+        return modified
+    }
+
+    // MARK: - Aligned Side-by-Side
+
+    /// Builds two equally-long `[DisplayLine]` arrays for side-by-side diff display.
+    /// Blank/empty placeholder rows are inserted on the side that has fewer lines so
+    /// that corresponding old/new lines always sit at the same vertical offset.
+    /// This keeps the two panes visually aligned no matter how many additions/deletions
+    /// have accumulated above the current scroll position.
+    ///
+    /// - `oldContent` / `newContent`: full file contents (post-fetch) for each side.
+    /// - `fileDiff`: parsed unified diff used to locate hunks.
+    /// - `oldInlineRanges` / `newInlineRanges`: per-line inline-change highlights
+    ///   (use `inlineRangesMap(fileDiff:)` to compute these).
+    static func buildSideBySideLines(
+        oldContent: String,
+        newContent: String,
+        fileDiff: FileDiff,
+        oldInlineRanges: [Int: [NSRange]] = [:],
+        newInlineRanges: [Int: [NSRange]] = [:]
+    ) -> (old: [DisplayLine], new: [DisplayLine]) {
+        let oldLines = oldContent.isEmpty ? [] : oldContent.components(separatedBy: "\n")
+        let newLines = newContent.isEmpty ? [] : newContent.components(separatedBy: "\n")
+
+        var resultOld: [DisplayLine] = []
+        var resultNew: [DisplayLine] = []
+        var padCounter = 0
+        var o = 1   // next 1-indexed old line to emit
+        var n = 1   // next 1-indexed new line to emit
+
+        func oldText(_ num: Int) -> String {
+            (num >= 1 && num <= oldLines.count) ? oldLines[num - 1] : ""
+        }
+        func newText(_ num: Int) -> String {
+            (num >= 1 && num <= newLines.count) ? newLines[num - 1] : ""
+        }
+
+        func emitContextPair() {
+            resultOld.append(DisplayLine(
+                id: "old-\(o)", lineNumber: o, text: oldText(o), type: .context
+            ))
+            resultNew.append(DisplayLine(
+                id: "file-\(n)", lineNumber: n, text: newText(n), type: .context
+            ))
+            o += 1; n += 1
+        }
+
+        func emitOldOnly() {
+            resultOld.append(DisplayLine(
+                id: "old-\(o)", lineNumber: o, text: oldText(o), type: .deletion
+            ))
+            padCounter += 1
+            resultNew.append(DisplayLine(
+                id: "pad-new-\(padCounter)", lineNumber: nil, text: "", type: .empty
+            ))
+            o += 1
+        }
+
+        func emitNewOnly() {
+            resultNew.append(DisplayLine(
+                id: "file-\(n)", lineNumber: n, text: newText(n), type: .addition
+            ))
+            padCounter += 1
+            resultOld.append(DisplayLine(
+                id: "pad-old-\(padCounter)", lineNumber: nil, text: "", type: .empty
+            ))
+            n += 1
+        }
+
+        func emitChangePair() {
+            let oldRanges = oldInlineRanges[o] ?? []
+            let newRanges = newInlineRanges[n] ?? []
+            resultOld.append(DisplayLine(
+                id: "old-\(o)", lineNumber: o, text: oldText(o), type: .deletion,
+                inlineRanges: oldRanges
+            ))
+            resultNew.append(DisplayLine(
+                id: "file-\(n)", lineNumber: n, text: newText(n), type: .addition,
+                inlineRanges: newRanges
+            ))
+            o += 1; n += 1
+        }
+
+        // Walk hunks in order of their position in the new file.
+        let hunks = fileDiff.hunks.sorted { $0.rightStartLine < $1.rightStartLine }
+
+        for hunk in hunks {
+            // 1. Emit unchanged region from current (o, n) up to the hunk start.
+            //    Hunk start lines are 1-indexed for the FIRST line of the hunk
+            //    (which is typically a context line).
+            while n < hunk.rightStartLine && o < hunk.leftStartLine
+                  && o <= oldLines.count && n <= newLines.count {
+                emitContextPair()
+            }
+
+            // 2. Walk this hunk's lines, emitting aligned pairs.
+            var i = 0
+            let lines = hunk.lines
+            while i < lines.count {
+                switch lines[i].type {
+                case .context:
+                    if o <= oldLines.count && n <= newLines.count {
+                        emitContextPair()
+                    } else {
+                        // Defensive: keep counters in sync with hunk if file content is short.
+                        o += 1; n += 1
+                    }
+                    i += 1
+
+                case .deletion, .addition:
+                    var deletions = 0
+                    while i < lines.count && lines[i].type == .deletion {
+                        deletions += 1; i += 1
+                    }
+                    var additions = 0
+                    while i < lines.count && lines[i].type == .addition {
+                        additions += 1; i += 1
+                    }
+                    let pairs = min(deletions, additions)
+                    // Modification pairs (deletion ↔ addition).
+                    for _ in 0..<pairs { emitChangePair() }
+                    // Pure deletions — new side gets empty padding rows.
+                    for _ in pairs..<deletions { emitOldOnly() }
+                    // Pure additions — old side gets empty padding rows.
+                    for _ in pairs..<additions { emitNewOnly() }
+
+                case .empty, .modification:
+                    // Display-only types — not produced by the diff parser.
+                    i += 1
+                }
+            }
+        }
+
+        // 3. Trailing unchanged content after the last hunk.
+        while o <= oldLines.count && n <= newLines.count {
+            emitContextPair()
+        }
+        while o <= oldLines.count { emitOldOnly() }
+        while n <= newLines.count { emitNewOnly() }
+
+        return (resultOld, resultNew)
     }
 
     /// Builds a mapping from line numbers to inline highlight ranges using diff hunk data.
@@ -188,7 +497,7 @@ enum DisplayLineBuilder {
                     if delCount > addCount {
                         markers.insert(max(markerPos + addCount, 0))
                     }
-                case .empty:
+                case .empty, .modification:
                     i += 1
                 }
             }

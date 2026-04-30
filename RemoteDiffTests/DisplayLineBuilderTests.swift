@@ -424,4 +424,551 @@ final class DisplayLineBuilderTests: XCTestCase {
 
         XCTAssertTrue(markers.isEmpty)
     }
+
+    // MARK: - Side-by-Side Aligned Builder
+
+    func testSideBySide_noChanges_isIdenticalAndAligned() {
+        let oldContent = "a\nb\nc"
+        let newContent = "a\nb\nc"
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertEqual(result.old.count, 3)
+        XCTAssertEqual(result.new.count, 3)
+        XCTAssertEqual(result.old.map { $0.text }, ["a", "b", "c"])
+        XCTAssertEqual(result.new.map { $0.text }, ["a", "b", "c"])
+        XCTAssertTrue(result.old.allSatisfy { $0.type == .context })
+        XCTAssertTrue(result.new.allSatisfy { $0.type == .context })
+    }
+
+    func testSideBySide_pureAddition_padsOldSide() {
+        // Old: line1, line3   New: line1, line2, line3
+        let oldContent = "line1\nline3"
+        let newContent = "line1\nline2\nline3"
+        let hunk = DiffHunk(header: "@@ -1,2 +1,3 @@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .context,  text: "line1", lineNumber: 1),
+            DiffLine(type: .addition, text: "line2", lineNumber: 2),
+            DiffLine(type: .context,  text: "line3", lineNumber: 3),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        // Both panes must have the same length so they stay aligned.
+        XCTAssertEqual(result.old.count, result.new.count)
+        XCTAssertEqual(result.new.count, 3)
+
+        // Old side: line1, <pad>, line3
+        XCTAssertEqual(result.old[0].text, "line1");  XCTAssertEqual(result.old[0].type, .context)
+        XCTAssertEqual(result.old[1].type, .empty);   XCTAssertNil(result.old[1].lineNumber)
+        XCTAssertEqual(result.old[2].text, "line3");  XCTAssertEqual(result.old[2].type, .context)
+
+        // New side: line1, line2 (addition), line3
+        XCTAssertEqual(result.new[0].text, "line1");  XCTAssertEqual(result.new[0].type, .context)
+        XCTAssertEqual(result.new[1].text, "line2");  XCTAssertEqual(result.new[1].type, .addition)
+        XCTAssertEqual(result.new[2].text, "line3");  XCTAssertEqual(result.new[2].type, .context)
+    }
+
+    func testSideBySide_pureDeletion_padsNewSide() {
+        // Old: line1, line2, line3   New: line1, line3
+        let oldContent = "line1\nline2\nline3"
+        let newContent = "line1\nline3"
+        let hunk = DiffHunk(header: "@@ -1,3 +1,2 @@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .context,  text: "line1", lineNumber: 1),
+            DiffLine(type: .deletion, text: "line2", lineNumber: 2),
+            DiffLine(type: .context,  text: "line3", lineNumber: 3),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertEqual(result.old.count, result.new.count)
+        XCTAssertEqual(result.old.count, 3)
+
+        // Old side: line1, line2 (deletion), line3
+        XCTAssertEqual(result.old[0].type, .context)
+        XCTAssertEqual(result.old[1].type, .deletion); XCTAssertEqual(result.old[1].text, "line2")
+        XCTAssertEqual(result.old[2].type, .context)
+
+        // New side: line1, <pad>, line3
+        XCTAssertEqual(result.new[0].type, .context); XCTAssertEqual(result.new[0].text, "line1")
+        XCTAssertEqual(result.new[1].type, .empty);   XCTAssertNil(result.new[1].lineNumber)
+        XCTAssertEqual(result.new[2].type, .context); XCTAssertEqual(result.new[2].text, "line3")
+    }
+
+    func testSideBySide_modificationPair_alignsOnSameRow() {
+        // line2 is modified — should appear on the SAME row on both sides.
+        let oldContent = "a\nfoo\nc"
+        let newContent = "a\nbar\nc"
+        let hunk = DiffHunk(header: "@@ -1,3 +1,3 @@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .context,  text: "a",   lineNumber: 1),
+            DiffLine(type: .deletion, text: "foo", lineNumber: 2),
+            DiffLine(type: .addition, text: "bar", lineNumber: 2),
+            DiffLine(type: .context,  text: "c",   lineNumber: 3),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertEqual(result.old.count, 3)
+        XCTAssertEqual(result.new.count, 3)
+        // Row 1 — modification pair on the same Y
+        XCTAssertEqual(result.old[1].text, "foo"); XCTAssertEqual(result.old[1].type, .deletion)
+        XCTAssertEqual(result.new[1].text, "bar"); XCTAssertEqual(result.new[1].type, .addition)
+        // Surrounding context aligned
+        XCTAssertEqual(result.old[0].text, result.new[0].text)
+        XCTAssertEqual(result.old[2].text, result.new[2].text)
+    }
+
+    func testSideBySide_unbalancedHunk_padsCorrectly() {
+        // 1 deletion, 3 additions → 1 modification pair + 2 pure additions.
+        // Old: a, x, b   New: a, y, p, q, b
+        let oldContent = "a\nx\nb"
+        let newContent = "a\ny\np\nq\nb"
+        let hunk = DiffHunk(header: "@@ -1,3 +1,5 @@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .context,  text: "a", lineNumber: 1),
+            DiffLine(type: .deletion, text: "x", lineNumber: 2),
+            DiffLine(type: .addition, text: "y", lineNumber: 2),
+            DiffLine(type: .addition, text: "p", lineNumber: 3),
+            DiffLine(type: .addition, text: "q", lineNumber: 4),
+            DiffLine(type: .context,  text: "b", lineNumber: 5),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertEqual(result.old.count, 5)
+        XCTAssertEqual(result.new.count, 5)
+        // Row 0: "a" context
+        XCTAssertEqual(result.old[0].type, .context); XCTAssertEqual(result.new[0].type, .context)
+        // Row 1: x ↔ y modification pair
+        XCTAssertEqual(result.old[1].type, .deletion); XCTAssertEqual(result.old[1].text, "x")
+        XCTAssertEqual(result.new[1].type, .addition); XCTAssertEqual(result.new[1].text, "y")
+        // Rows 2,3: pad on old, p/q additions on new
+        XCTAssertEqual(result.old[2].type, .empty); XCTAssertEqual(result.new[2].type, .addition)
+        XCTAssertEqual(result.old[3].type, .empty); XCTAssertEqual(result.new[3].type, .addition)
+        XCTAssertEqual(result.new[2].text, "p")
+        XCTAssertEqual(result.new[3].text, "q")
+        // Row 4: "b" context aligned
+        XCTAssertEqual(result.old[4].text, "b"); XCTAssertEqual(result.new[4].text, "b")
+    }
+
+    func testSideBySide_keepsAlignmentAcrossMultipleHunks() {
+        // Two separate hunks with unchanged regions in between.
+        // Old: 1,2,3,4,5,6,7  New: 1,2,A,4,5,B,7
+        let oldContent = (1...7).map(String.init).joined(separator: "\n")
+        let newContent = "1\n2\nA\n4\n5\nB\n7"
+        let hunk1 = DiffHunk(header: "@@ -3,1 +3,1 @@", leftStartLine: 3, rightStartLine: 3, lines: [
+            DiffLine(type: .deletion, text: "3", lineNumber: 3),
+            DiffLine(type: .addition, text: "A", lineNumber: 3),
+        ])
+        let hunk2 = DiffHunk(header: "@@ -6,1 +6,1 @@", leftStartLine: 6, rightStartLine: 6, lines: [
+            DiffLine(type: .deletion, text: "6", lineNumber: 6),
+            DiffLine(type: .addition, text: "B", lineNumber: 6),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk1, hunk2])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertEqual(result.old.count, 7)
+        XCTAssertEqual(result.new.count, 7)
+        // Row 2: 3 ↔ A
+        XCTAssertEqual(result.old[2].text, "3"); XCTAssertEqual(result.old[2].type, .deletion)
+        XCTAssertEqual(result.new[2].text, "A"); XCTAssertEqual(result.new[2].type, .addition)
+        // Row 5: 6 ↔ B
+        XCTAssertEqual(result.old[5].text, "6"); XCTAssertEqual(result.old[5].type, .deletion)
+        XCTAssertEqual(result.new[5].text, "B"); XCTAssertEqual(result.new[5].type, .addition)
+        // Untouched rows match
+        XCTAssertEqual(result.old[0].text, result.new[0].text)  // "1"
+        XCTAssertEqual(result.old[3].text, result.new[3].text)  // "4"
+        XCTAssertEqual(result.old[6].text, result.new[6].text)  // "7"
+    }
+
+    func testSideBySide_inlineRangesAreAppliedToModificationPairs() {
+        let oldContent = "foo"
+        let newContent = "bar"
+        let hunk = DiffHunk(header: "@@ -1,1 +1,1 @@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .deletion, text: "foo", lineNumber: 1),
+            DiffLine(type: .addition, text: "bar", lineNumber: 1),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+        let oldRanges: [Int: [NSRange]] = [1: [NSRange(location: 0, length: 3)]]
+        let newRanges: [Int: [NSRange]] = [1: [NSRange(location: 0, length: 3)]]
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff,
+            oldInlineRanges: oldRanges, newInlineRanges: newRanges
+        )
+
+        XCTAssertEqual(result.old[0].inlineRanges.count, 1)
+        XCTAssertEqual(result.new[0].inlineRanges.count, 1)
+        XCTAssertEqual(result.old[0].inlineRanges[0].length, 3)
+    }
+
+    func testSideBySide_emptyFiles_returnEmptyArrays() {
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [])
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: "", newContent: "", fileDiff: fileDiff
+        )
+        XCTAssertTrue(result.old.isEmpty)
+        XCTAssertTrue(result.new.isEmpty)
+    }
+
+    // MARK: - Connector Link
+
+    func testConnectorLink_pureDeletion_collapsesNewSide() {
+        // 2 deletions, 0 additions — the link should span 2 old lines and a
+        // zero-width range on the new side.
+        let hunk = DiffHunk(header: "@@", leftStartLine: 5, rightStartLine: 5, lines: [
+            DiffLine(type: .deletion, text: "a", lineNumber: 5),
+            DiffLine(type: .deletion, text: "b", lineNumber: 6),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertEqual(links[0].kind, .deletion)
+        XCTAssertEqual(links[0].oldStartLine, 5)
+        XCTAssertEqual(links[0].oldEndLine, 7)   // exclusive
+        XCTAssertEqual(links[0].oldRowCount, 2)
+        XCTAssertEqual(links[0].newStartLine, 5)
+        XCTAssertEqual(links[0].newEndLine, 5)   // collapsed
+        XCTAssertEqual(links[0].newRowCount, 0)
+    }
+
+    func testConnectorLink_pureAddition_collapsesOldSide() {
+        let hunk = DiffHunk(header: "@@", leftStartLine: 10, rightStartLine: 10, lines: [
+            DiffLine(type: .addition, text: "a", lineNumber: 10),
+            DiffLine(type: .addition, text: "b", lineNumber: 11),
+            DiffLine(type: .addition, text: "c", lineNumber: 12),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertEqual(links[0].kind, .addition)
+        XCTAssertEqual(links[0].newStartLine, 10)
+        XCTAssertEqual(links[0].newEndLine, 13)
+        XCTAssertEqual(links[0].newRowCount, 3)
+        XCTAssertEqual(links[0].oldStartLine, 10)
+        XCTAssertEqual(links[0].oldEndLine, 10)  // collapsed
+        XCTAssertEqual(links[0].oldRowCount, 0)
+    }
+
+    func testConnectorLink_modification_bothSides() {
+        // 1 deletion + 9 additions — a typical "docstring expanded" change.
+        var lines: [DiffLine] = [
+            DiffLine(type: .deletion, text: "old", lineNumber: 253),
+        ]
+        for k in 0..<9 {
+            lines.append(DiffLine(type: .addition, text: "new\(k)", lineNumber: 253 + k))
+        }
+        let hunk = DiffHunk(header: "@@", leftStartLine: 253, rightStartLine: 253, lines: lines)
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertEqual(links[0].kind, .modification)
+        XCTAssertEqual(links[0].oldStartLine, 253); XCTAssertEqual(links[0].oldEndLine, 254)
+        XCTAssertEqual(links[0].newStartLine, 253); XCTAssertEqual(links[0].newEndLine, 262)
+        XCTAssertEqual(links[0].oldRowCount, 1)
+        XCTAssertEqual(links[0].newRowCount, 9)
+    }
+
+    func testConnectorLink_advancesPastContextBetweenChanges() {
+        // context, deletion, addition, context, deletion, addition
+        let hunk = DiffHunk(header: "@@", leftStartLine: 1, rightStartLine: 1, lines: [
+            DiffLine(type: .context,  text: "ctx1", lineNumber: 1),
+            DiffLine(type: .deletion, text: "d1",   lineNumber: 2),
+            DiffLine(type: .addition, text: "a1",   lineNumber: 2),
+            DiffLine(type: .context,  text: "ctx2", lineNumber: 3),
+            DiffLine(type: .deletion, text: "d2",   lineNumber: 4),
+            DiffLine(type: .addition, text: "a2",   lineNumber: 4),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 2)
+        XCTAssertEqual(links[0].oldStartLine, 2); XCTAssertEqual(links[0].oldEndLine, 3)
+        XCTAssertEqual(links[0].newStartLine, 2); XCTAssertEqual(links[0].newEndLine, 3)
+        XCTAssertEqual(links[1].oldStartLine, 4); XCTAssertEqual(links[1].oldEndLine, 5)
+        XCTAssertEqual(links[1].newStartLine, 4); XCTAssertEqual(links[1].newEndLine, 5)
+        XCTAssertTrue(links.allSatisfy { $0.kind == .modification })
+    }
+
+    func testConnectorLink_multipleHunksProduceMultipleLinks() {
+        let hunk1 = DiffHunk(header: "@@1", leftStartLine: 10, rightStartLine: 10, lines: [
+            DiffLine(type: .deletion, text: "a", lineNumber: 10),
+        ])
+        let hunk2 = DiffHunk(header: "@@2", leftStartLine: 100, rightStartLine: 99, lines: [
+            DiffLine(type: .addition, text: "b", lineNumber: 99),
+            DiffLine(type: .addition, text: "c", lineNumber: 100),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk1, hunk2])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 2)
+        XCTAssertEqual(links[0].kind, .deletion)
+        XCTAssertEqual(links[1].kind, .addition)
+        XCTAssertEqual(links[1].newStartLine, 99)
+        XCTAssertEqual(links[1].newEndLine, 101)
+    }
+
+    func testConnectorLink_emptyDiff_producesNoLinks() {
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [])
+        XCTAssertTrue(ConnectorLink.compute(fileDiff: fileDiff).isEmpty)
+    }
+
+    func testConnectorLink_interleavedDelAdd_collapseToSingleLink() {
+        // [del, add, del, add] with no context between — should be ONE link
+        // covering both edits, not two separate links.
+        let hunk = DiffHunk(header: "@@", leftStartLine: 75, rightStartLine: 75, lines: [
+            DiffLine(type: .deletion, text: "firstName: old", lineNumber: 75),
+            DiffLine(type: .addition, text: "firstName: new", lineNumber: 75),
+            DiffLine(type: .deletion, text: "lastName: old",  lineNumber: 76),
+            DiffLine(type: .addition, text: "lastName: new",  lineNumber: 76),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        XCTAssertEqual(links.count, 1)
+        XCTAssertEqual(links[0].kind, .modification)
+        XCTAssertEqual(links[0].oldStartLine, 75); XCTAssertEqual(links[0].oldEndLine, 77)
+        XCTAssertEqual(links[0].newStartLine, 75); XCTAssertEqual(links[0].newEndLine, 77)
+    }
+
+    // MARK: - Modified Line Numbers
+
+    func testModifiedLineNumbers_emptyForPureAddition() {
+        let hunk = DiffHunk(header: "@@", leftStartLine: 5, rightStartLine: 5, lines: [
+            DiffLine(type: .addition, text: "a", lineNumber: 5),
+            DiffLine(type: .addition, text: "b", lineNumber: 6),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        XCTAssertTrue(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .right).isEmpty)
+        XCTAssertTrue(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .left).isEmpty)
+    }
+
+    func testModifiedLineNumbers_emptyForPureDeletion() {
+        let hunk = DiffHunk(header: "@@", leftStartLine: 5, rightStartLine: 5, lines: [
+            DiffLine(type: .deletion, text: "a", lineNumber: 5),
+            DiffLine(type: .deletion, text: "b", lineNumber: 6),
+        ])
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+        XCTAssertTrue(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .left).isEmpty)
+        XCTAssertTrue(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .right).isEmpty)
+    }
+
+    func testModifiedLineNumbers_collectsBothSidesForModification() {
+        // 1 deletion + 9 additions — line 253 on left and 253…261 on right.
+        var lines: [DiffLine] = [DiffLine(type: .deletion, text: "old", lineNumber: 253)]
+        for k in 0..<9 {
+            lines.append(DiffLine(type: .addition, text: "new\(k)", lineNumber: 253 + k))
+        }
+        let hunk = DiffHunk(header: "@@", leftStartLine: 253, rightStartLine: 253, lines: lines)
+        let fileDiff = FileDiff(oldPath: "x", newPath: "x", isBinary: false, hunks: [hunk])
+
+        XCTAssertEqual(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .left), [253])
+        XCTAssertEqual(DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .right),
+                       Set(253..<262))
+    }
+
+    // MARK: - buildFullFileLines with modifiedLines
+
+    func testFullFileLines_modifiedLinesGetModificationType() {
+        let content = "a\nb\nc"
+        let lines = DisplayLineBuilder.buildFullFileLines(
+            content: content,
+            changedLines: [2, 3],          // both 2 and 3 are changed
+            highlightType: .addition,
+            modifiedLines: [2]              // line 2 is a modification, line 3 is a pure addition
+        )
+        XCTAssertEqual(lines[0].type, .context)
+        XCTAssertEqual(lines[1].type, .modification)
+        XCTAssertEqual(lines[2].type, .addition)
+    }
+
+    func testFullFileLines_modifiedLinesTakePrecedenceOverHighlightType() {
+        // A line that's both in changedLines and modifiedLines should be tagged
+        // .modification, not the (now overridden) highlightType.
+        let content = "only one line"
+        let lines = DisplayLineBuilder.buildFullFileLines(
+            content: content,
+            changedLines: [1],
+            highlightType: .deletion,
+            modifiedLines: [1]
+        )
+        XCTAssertEqual(lines[0].type, .modification)
+    }
+
+    // MARK: - Change Region
+
+    /// Helper to build a DisplayLine with a specific type for region tests.
+    private func dl(_ type: DiffLineType, _ id: String = UUID().uuidString,
+                    isHunkHeader: Bool = false) -> DisplayLine {
+        DisplayLine(id: id, lineNumber: nil, text: "", type: type, isHunkHeader: isHunkHeader)
+    }
+
+    func testChangeRegion_emptyInput() {
+        XCTAssertTrue(ChangeRegion.compute(left: [], right: []).isEmpty)
+    }
+
+    func testChangeRegion_allContext_noRegions() {
+        let left  = [dl(.context), dl(.context), dl(.context)]
+        let right = [dl(.context), dl(.context), dl(.context)]
+        XCTAssertTrue(ChangeRegion.compute(left: left, right: right).isEmpty)
+    }
+
+    func testChangeRegion_pureAddition_singleRegion() {
+        // Row 1: padding on old, addition on new
+        let left  = [dl(.context), dl(.empty),    dl(.context)]
+        let right = [dl(.context), dl(.addition), dl(.context)]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 1)
+        XCTAssertEqual(regions[0].startRow, 1)
+        XCTAssertEqual(regions[0].endRow, 1)
+        XCTAssertEqual(regions[0].kind, .addition)
+        XCTAssertEqual(regions[0].rowCount, 1)
+    }
+
+    func testChangeRegion_pureDeletion_singleRegion() {
+        let left  = [dl(.context), dl(.deletion), dl(.context)]
+        let right = [dl(.context), dl(.empty),    dl(.context)]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 1)
+        XCTAssertEqual(regions[0].kind, .deletion)
+        XCTAssertEqual(regions[0].startRow, 1)
+        XCTAssertEqual(regions[0].endRow, 1)
+    }
+
+    func testChangeRegion_modificationPair_classifiedAsModification() {
+        let left  = [dl(.deletion)]
+        let right = [dl(.addition)]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 1)
+        XCTAssertEqual(regions[0].kind, .modification)
+    }
+
+    func testChangeRegion_mixedRunIsSingleModificationRegion() {
+        // 3 contiguous changed rows: pure-addition, modification pair, pure-deletion.
+        // Should collapse into ONE region classified as modification.
+        let left = [
+            dl(.context),
+            dl(.empty),     // pure addition
+            dl(.deletion),  // mod pair
+            dl(.deletion),  // pure deletion
+            dl(.context),
+        ]
+        let right = [
+            dl(.context),
+            dl(.addition),  // pure addition
+            dl(.addition),  // mod pair
+            dl(.empty),     // pure deletion
+            dl(.context),
+        ]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 1)
+        XCTAssertEqual(regions[0].startRow, 1)
+        XCTAssertEqual(regions[0].endRow, 3)
+        XCTAssertEqual(regions[0].kind, .modification)
+        XCTAssertEqual(regions[0].rowCount, 3)
+    }
+
+    func testChangeRegion_multipleSeparateRegions() {
+        let left = [
+            dl(.deletion),  // region 1
+            dl(.context),
+            dl(.empty),     // region 2
+            dl(.context),
+            dl(.deletion),  // region 3
+        ]
+        let right = [
+            dl(.empty),
+            dl(.context),
+            dl(.addition),
+            dl(.context),
+            dl(.addition),
+        ]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 3)
+        XCTAssertEqual(regions[0].kind, .deletion)
+        XCTAssertEqual(regions[1].kind, .addition)
+        XCTAssertEqual(regions[2].kind, .modification)
+        XCTAssertEqual(regions[0].startRow, 0); XCTAssertEqual(regions[0].endRow, 0)
+        XCTAssertEqual(regions[1].startRow, 2); XCTAssertEqual(regions[1].endRow, 2)
+        XCTAssertEqual(regions[2].startRow, 4); XCTAssertEqual(regions[2].endRow, 4)
+    }
+
+    func testChangeRegion_hunkHeadersSeparateRegions() {
+        // In Diff mode the panes contain hunk headers — a header should split a
+        // would-be-contiguous run into two regions.
+        let left = [
+            dl(.deletion),
+            dl(.context, isHunkHeader: true),
+            dl(.deletion),
+        ]
+        let right = [
+            dl(.addition),
+            dl(.context, isHunkHeader: true),
+            dl(.addition),
+        ]
+        let regions = ChangeRegion.compute(left: left, right: right)
+        XCTAssertEqual(regions.count, 2)
+        XCTAssertEqual(regions[0].startRow, 0); XCTAssertEqual(regions[0].endRow, 0)
+        XCTAssertEqual(regions[1].startRow, 2); XCTAssertEqual(regions[1].endRow, 2)
+    }
+
+    func testChangeRegion_mismatchedLengths_returnsEmpty() {
+        let left  = [dl(.context)]
+        let right = [dl(.context), dl(.addition)]
+        XCTAssertTrue(ChangeRegion.compute(left: left, right: right).isEmpty)
+    }
+
+    func testChangeRegion_endToEndWithAlignedBuilder() {
+        // Integration-style test: build aligned arrays via the public builder,
+        // then verify ChangeRegion picks them up correctly.
+        let oldContent = "a\nb\nc\nd"
+        let newContent = "a\nB\nc\nE\nd"
+        let hunk = DiffHunk(header: "@@", leftStartLine: 2, rightStartLine: 2, lines: [
+            DiffLine(type: .deletion, text: "b", lineNumber: 2),
+            DiffLine(type: .addition, text: "B", lineNumber: 2),
+            DiffLine(type: .context,  text: "c", lineNumber: 3),
+            DiffLine(type: .addition, text: "E", lineNumber: 4),
+            DiffLine(type: .context,  text: "d", lineNumber: 5),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+        let aligned = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+        let regions = ChangeRegion.compute(left: aligned.old, right: aligned.new)
+        XCTAssertEqual(regions.count, 2)
+        XCTAssertEqual(regions[0].kind, .modification)  // b ↔ B
+        XCTAssertEqual(regions[1].kind, .addition)      // pure +E
+    }
+
+    func testSideBySide_newSideUsesFilePrefixForScrollAnchors() {
+        // The new side's IDs must be `file-N` so existing change-navigation
+        // (changeAnchors -> file-N) keeps working.
+        let oldContent = "a\nb"
+        let newContent = "a\nB"
+        let hunk = DiffHunk(header: "@@ -2,1 +2,1 @@", leftStartLine: 2, rightStartLine: 2, lines: [
+            DiffLine(type: .deletion, text: "b", lineNumber: 2),
+            DiffLine(type: .addition, text: "B", lineNumber: 2),
+        ])
+        let fileDiff = FileDiff(oldPath: "x.txt", newPath: "x.txt", isBinary: false, hunks: [hunk])
+
+        let result = DisplayLineBuilder.buildSideBySideLines(
+            oldContent: oldContent, newContent: newContent, fileDiff: fileDiff
+        )
+
+        XCTAssertTrue(result.new.contains { $0.id == "file-2" && $0.type == .addition })
+        XCTAssertTrue(result.old.contains { $0.id == "old-2"  && $0.type == .deletion })
+    }
 }

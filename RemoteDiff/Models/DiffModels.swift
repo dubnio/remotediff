@@ -7,6 +7,13 @@ enum DiffLineType: Equatable {
     case addition
     case deletion
     case empty
+    /// A row that's part of a modification pair (a deletion paired with an
+    /// addition, where the line was *changed* rather than purely added or
+    /// removed). Rendered with a distinct color (typically blue) so the user
+    /// can tell at a glance which lines are real additions/deletions vs
+    /// edits to existing lines. Only set by display-line builders; the diff
+    /// parser still produces .addition / .deletion / .context.
+    case modification
 }
 
 // MARK: - DiffLine
@@ -116,7 +123,9 @@ func pairLines(_ lines: [DiffLine]) -> [(left: DiffLine?, right: DiffLine?)] {
             result.append((left: DiffLine(type: .empty, text: "", lineNumber: nil), right: lines[i]))
             i += 1
 
-        case .empty:
+        case .empty, .modification:
+            // .modification is a display-only type; the parser never produces
+            // it, so we just skip if it ever appears here.
             i += 1
         }
     }

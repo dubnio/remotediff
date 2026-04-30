@@ -34,6 +34,8 @@
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
 		AA000031 /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000031 /* DeepLink.swift */; };
 		AA000032 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000032 /* DeepLinkTests.swift */; };
+		AA000033 /* FileGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000033 /* FileGroupTests.swift */; };
+		AA000034 /* ConnectorRibbonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ConnectorRibbonsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -75,6 +77,8 @@
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000031 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		AB000032 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		AB000033 /* FileGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGroupTests.swift; sourceTree = "<group>"; };
+		AB000034 /* ConnectorRibbonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectorRibbonsView.swift; sourceTree = "<group>"; };
 		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF000002 /* RemoteDiffTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RemoteDiffTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -155,6 +159,7 @@
 				AB000024 /* SyntaxHighlighterTests.swift */,
 				AB000028 /* SyntaxThemeTests.swift */,
 				AB000032 /* DeepLinkTests.swift */,
+				AB000033 /* FileGroupTests.swift */,
 			);
 			path = RemoteDiffTests;
 			sourceTree = "<group>";
@@ -174,6 +179,7 @@
 				AB000016 /* LanguageConfig.swift */,
 				AB000010 /* DiffView.swift */,
 				AB000019 /* CodePaneView.swift */,
+				AB000034 /* ConnectorRibbonsView.swift */,
 				AB000011 /* SidebarView.swift */,
 				AB000012 /* LiveStatusBar.swift */,
 				AB000027 /* SettingsView.swift */,
@@ -292,6 +298,7 @@
 				AA000010 /* DiffView.swift in Sources */,
 				AA000018 /* DisplayLineBuilder.swift in Sources */,
 				AA000019 /* CodePaneView.swift in Sources */,
+				AA000034 /* ConnectorRibbonsView.swift in Sources */,
 				AA000011 /* SidebarView.swift in Sources */,
 				AA000012 /* LiveStatusBar.swift in Sources */,
 				AA000023 /* SyntaxHighlighter.swift in Sources */,
@@ -313,6 +320,7 @@
 				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
 				AA000028 /* SyntaxThemeTests.swift in Sources */,
 				AA000032 /* DeepLinkTests.swift in Sources */,
+				AA000033 /* FileGroupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

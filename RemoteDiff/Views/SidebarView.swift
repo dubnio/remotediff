@@ -277,11 +277,16 @@ struct SidebarView: View {
                 }
                 .frame(maxWidth: .infinity)
             } else {
+                let groups = FileGroup.group(sshService.fileDiffs)
                 List(selection: $selectedFileID) {
-                    Section("Changed Files (\(sshService.fileDiffs.count))") {
-                        ForEach(sshService.fileDiffs) { file in
-                            FileRow(file: file)
-                                .tag(file.id)
+                    ForEach(groups) { group in
+                        Section {
+                            ForEach(group.files) { file in
+                                FileRow(file: file, showDirectory: false)
+                                    .tag(file.id)
+                            }
+                        } header: {
+                            FileGroupHeader(group: group)
                         }
                     }
                 }
@@ -591,10 +596,71 @@ struct RepositoryRow: View {
     }
 }
 
+// MARK: - File Group
+
+/// A group of changed files that share the same parent directory.
+/// Used by the sidebar to render directory headers above the files.
+struct FileGroup: Identifiable {
+    let directory: String     // e.g. "app/core/tests" or "" for root
+    let files: [FileDiff]
+
+    var id: String { directory }
+
+    /// Pretty display path with breadcrumb separators, e.g. "app › core › tests".
+    /// Returns "/" for root-level files.
+    var displayDirectory: String {
+        if directory.isEmpty { return "/" }
+        return directory.split(separator: "/").joined(separator: " › ")
+    }
+
+    /// Groups files by parent directory, preserving the original order of first
+    /// appearance for both directories and the files within them.
+    static func group(_ files: [FileDiff]) -> [FileGroup] {
+        var order: [String] = []
+        var buckets: [String: [FileDiff]] = [:]
+        for file in files {
+            let dir = (file.displayName as NSString).deletingLastPathComponent
+            if buckets[dir] == nil {
+                order.append(dir)
+                buckets[dir] = []
+            }
+            buckets[dir]?.append(file)
+        }
+        return order.map { FileGroup(directory: $0, files: buckets[$0] ?? []) }
+    }
+}
+
+// MARK: - File Group Header
+
+/// Section header shown above a group of files sharing the same directory.
+struct FileGroupHeader: View {
+    let group: FileGroup
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "folder")
+                .font(.caption2)
+                .foregroundColor(.secondary)
+            Text(group.displayDirectory)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .lineLimit(1)
+                .truncationMode(.head)
+            Spacer()
+            Text("\(group.files.count)")
+                .font(.system(.caption2, design: .monospaced))
+                .foregroundColor(.secondary.opacity(0.7))
+        }
+    }
+}
+
 // MARK: - File Row
 
 struct FileRow: View {
     let file: FileDiff
+    /// When false, the inline directory path is hidden (used when the parent
+    /// section already shows a directory header).
+    var showDirectory: Bool = true
 
     var body: some View {
         HStack(spacing: 6) {
@@ -608,7 +674,7 @@ struct FileRow: View {
                     .lineLimit(1)
                     .truncationMode(.middle)
 
-                if let dir = directoryPath, !dir.isEmpty {
+                if showDirectory, let dir = directoryPath, !dir.isEmpty {
                     Text(dir)
                         .font(.system(.caption2, design: .monospaced))
                         .foregroundColor(.secondary)
