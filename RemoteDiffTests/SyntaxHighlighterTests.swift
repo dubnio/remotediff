@@ -227,6 +227,85 @@ final class SyntaxHighlighterTests: XCTestCase {
         XCTAssertTrue(comments.isEmpty)
     }
 
+    // MARK: - Python Triple-Quoted Strings
+
+    func testPythonTripleStringSingleLine() {
+        let tokens = SyntaxHighlighter.tokenize(
+            line: #"x = """hello""""#, language: .python
+        )
+        let strings = tokens.filter { $0.kind == .string }
+        XCTAssertEqual(strings.count, 1)
+        XCTAssertEqual(strings[0].text, "\"\"\"hello\"\"\"")
+    }
+
+    func testPythonTripleSingleQuoteSingleLine() {
+        let tokens = SyntaxHighlighter.tokenize(
+            line: "x = '''hello'''", language: .python
+        )
+        let strings = tokens.filter { $0.kind == .string }
+        XCTAssertEqual(strings.count, 1)
+        XCTAssertEqual(strings[0].text, "'''hello'''")
+    }
+
+    func testPythonTripleStringOpensAcrossLines() {
+        let result = SyntaxHighlighter.tokenizeWithState(
+            line: "\"\"\"docstring start",
+            language: .python,
+            inBlockComment: false,
+            inTripleString: nil
+        )
+        XCTAssertEqual(result.inTripleString, "\"\"\"")
+        // Entire content should be a string token
+        XCTAssertEqual(result.tokens.count, 1)
+        XCTAssertEqual(result.tokens[0].kind, .string)
+    }
+
+    func testPythonTripleStringContinuesInside() {
+        // Line in the middle of a docstring — no closing delimiter; entire line should be string,
+        // and Python keywords like "for" / "and" must NOT be highlighted.
+        let result = SyntaxHighlighter.tokenizeWithState(
+            line: "After Okta login, the SPA uses APIs with auth for all data and uses requests",
+            language: .python,
+            inBlockComment: false,
+            inTripleString: "\"\"\""
+        )
+        XCTAssertEqual(result.inTripleString, "\"\"\"")
+        XCTAssertEqual(result.tokens.count, 1)
+        XCTAssertEqual(result.tokens[0].kind, .string)
+        XCTAssertTrue(result.tokens.allSatisfy { $0.kind == .string })
+        XCTAssertTrue(result.tokens.filter { $0.kind == .keyword }.isEmpty)
+    }
+
+    func testPythonTripleStringClosesAcrossLines() {
+        let result = SyntaxHighlighter.tokenizeWithState(
+            line: "end of docstring.\"\"\"\nimport json",
+            language: .python,
+            inBlockComment: false,
+            inTripleString: "\"\"\""
+        )
+        // Note: tokenizer is line-based; we pass a line that contains the closing """.
+        XCTAssertNil(result.inTripleString)
+        // First token should be the closed string.
+        XCTAssertEqual(result.tokens.first?.kind, .string)
+    }
+
+    func testPythonTripleStringDoesNotEatSingleQuoteFirst() {
+        // Make sure that triple-quote detection runs before single-char string detection.
+        // """x""" must be a single triple-quoted string, not three separate "" empty strings
+        // plus an x.
+        let tokens = SyntaxHighlighter.tokenize(line: "\"\"\"x\"\"\"", language: .python)
+        let strings = tokens.filter { $0.kind == .string }
+        XCTAssertEqual(strings.count, 1)
+        XCTAssertEqual(strings[0].text, "\"\"\"x\"\"\"")
+    }
+
+    func testPythonOrdinaryStringStillWorks() {
+        let tokens = SyntaxHighlighter.tokenize(line: "x = \"hello\"", language: .python)
+        let strings = tokens.filter { $0.kind == .string }
+        XCTAssertEqual(strings.count, 1)
+        XCTAssertEqual(strings[0].text, "\"hello\"")
+    }
+
     // MARK: - JavaScript Template Strings
 
     func testBacktickString() {

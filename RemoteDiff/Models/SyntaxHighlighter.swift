@@ -21,10 +21,20 @@ struct SyntaxToken: Equatable {
 
 // MARK: - Tokenization Result
 
-/// Result of tokenizing a single line, including block-comment carry-over state.
+/// Result of tokenizing a single line, including multi-line carry-over state
+/// (block comments and triple-quoted strings).
 struct TokenizeResult {
     let tokens: [SyntaxToken]
     let inBlockComment: Bool
+    /// If non-nil, the line ended inside a triple-quoted string; the value is the
+    /// open delimiter (e.g. `"""` or `'''`) used to look for the matching close.
+    let inTripleString: String?
+
+    init(tokens: [SyntaxToken], inBlockComment: Bool, inTripleString: String? = nil) {
+        self.tokens = tokens
+        self.inBlockComment = inBlockComment
+        self.inTripleString = inTripleString
+    }
 }
 
 // MARK: - Syntax Highlighter
@@ -33,9 +43,9 @@ struct TokenizeResult {
 /// No UI dependencies — produces `[SyntaxToken]` that views can render with colors.
 enum SyntaxHighlighter {
 
-    /// Tokenize a line with default state (not inside a block comment).
+    /// Tokenize a line with default state (not inside a block comment or triple string).
     static func tokenize(line: String, language: LanguageConfig) -> [SyntaxToken] {
-        tokenizeWithState(line: line, language: language, inBlockComment: false).tokens
+        tokenizeWithState(line: line, language: language, inBlockComment: false, inTripleString: nil).tokens
     }
 
     /// Tokenize a line with explicit block-comment state tracking.
@@ -44,8 +54,18 @@ enum SyntaxHighlighter {
         language: LanguageConfig,
         inBlockComment: Bool
     ) -> TokenizeResult {
+        tokenizeWithState(line: line, language: language, inBlockComment: inBlockComment, inTripleString: nil)
+    }
+
+    /// Tokenize a line with explicit block-comment and triple-string state tracking.
+    static func tokenizeWithState(
+        line: String,
+        language: LanguageConfig,
+        inBlockComment: Bool,
+        inTripleString: String?
+    ) -> TokenizeResult {
         guard !line.isEmpty else {
-            return TokenizeResult(tokens: [], inBlockComment: inBlockComment)
+            return TokenizeResult(tokens: [], inBlockComment: inBlockComment, inTripleString: inTripleString)
         }
 
         var tokens: [SyntaxToken] = []
@@ -53,20 +73,41 @@ enum SyntaxHighlighter {
         let count = chars.count
         var i = 0
         var stillInBlock = inBlockComment
+        var stillInTriple = inTripleString
+
+        // If we're inside a triple-quoted string from a previous line, consume until
+        // the matching closing delimiter.
+        if let openDelim = stillInTriple {
+            if let endIdx = findSubstring(chars, from: 0, target: openDelim) {
+                let endPos = endIdx + openDelim.count
+                tokens.append(SyntaxToken(text: String(chars[0..<endPos]), kind: .string))
+                i = endPos
+                stillInTriple = nil
+            } else {
+                // Entire line is still inside the triple-quoted string
+                return TokenizeResult(
+                    tokens: [SyntaxToken(text: line, kind: .string)],
+                    inBlockComment: false,
+                    inTripleString: openDelim
+                )
+            }
+        }
 
         // If we're inside a block comment from a previous line, consume until end marker.
         if stillInBlock {
             if let endMarker = language.commentBlockEnd {
-                if let endIdx = findSubstring(chars, from: 0, target: endMarker) {
+                if let endIdx = findSubstring(chars, from: i, target: endMarker) {
                     let endPos = endIdx + endMarker.count
-                    tokens.append(SyntaxToken(text: String(chars[0..<endPos]), kind: .comment))
+                    tokens.append(SyntaxToken(text: String(chars[i..<endPos]), kind: .comment))
                     i = endPos
                     stillInBlock = false
                 } else {
-                    // Entire line is still inside block comment
+                    // Entire remainder of line is still inside block comment
+                    tokens.append(SyntaxToken(text: String(chars[i...]), kind: .comment))
                     return TokenizeResult(
-                        tokens: [SyntaxToken(text: line, kind: .comment)],
-                        inBlockComment: true
+                        tokens: tokens,
+                        inBlockComment: true,
+                        inTripleString: nil
                     )
                 }
             } else {
@@ -103,7 +144,17 @@ enum SyntaxHighlighter {
                 continue
             }
 
-            // 3. Check for string
+            // 3. Check for triple-quoted string (must be checked before single-char strings
+            //    so e.g. `"""` isn't read as two empty strings).
+            if let (token, endPos, openDelim) = tryTripleString(chars, from: i, language: language) {
+                flushPlain()
+                tokens.append(token)
+                i = endPos
+                if let openDelim = openDelim { stillInTriple = openDelim; break }
+                continue
+            }
+
+            // 4. Check for string
             if let (token, endPos) = tryString(chars, from: i, language: language) {
                 flushPlain()
                 tokens.append(token)
@@ -111,7 +162,7 @@ enum SyntaxHighlighter {
                 continue
             }
 
-            // 4. Check for number (must not be preceded by a word char)
+            // 5. Check for number (must not be preceded by a word char)
             if chars[i].isNumber && !isPrecededByWordChar(chars, at: i) {
                 flushPlain()
                 let (token, endPos) = consumeNumber(chars, from: i)
@@ -120,7 +171,7 @@ enum SyntaxHighlighter {
                 continue
             }
 
-            // 5. Check for word (identifiers / keywords / types / literals)
+            // 6. Check for word (identifiers / keywords / types / literals)
             if isWordStart(chars[i]) {
                 flushPlain()
                 let (word, endPos) = consumeWord(chars, from: i)
@@ -130,14 +181,14 @@ enum SyntaxHighlighter {
                 continue
             }
 
-            // 6. Default: plain character (operators, punctuation, whitespace)
+            // 7. Default: plain character (operators, punctuation, whitespace)
             plainBuffer.append(chars[i])
             i += 1
         }
 
         flushPlain()
 
-        return TokenizeResult(tokens: tokens, inBlockComment: stillInBlock)
+        return TokenizeResult(tokens: tokens, inBlockComment: stillInBlock, inTripleString: stillInTriple)
     }
 
     // MARK: - Line Comment
@@ -184,6 +235,34 @@ enum SyntaxHighlighter {
             let text = String(chars[i...])
             return (SyntaxToken(text: text, kind: .comment), chars.count, true)
         }
+    }
+
+    // MARK: - Triple-Quoted String
+
+    /// Returns (token, newIndex, openDelimIfStillOpen) or nil.
+    /// If `openDelimIfStillOpen` is non-nil, the string was not closed on this line.
+    private static func tryTripleString(
+        _ chars: [Character], from i: Int, language: LanguageConfig
+    ) -> (SyntaxToken, Int, String?)? {
+        for delim in language.tripleStringDelimiters {
+            let delimChars = Array(delim)
+            guard i + delimChars.count <= chars.count else { continue }
+            let slice = Array(chars[i..<(i + delimChars.count)])
+            guard slice == delimChars else { continue }
+
+            // Found triple-string opener — look for matching closer.
+            let searchFrom = i + delimChars.count
+            if let endIdx = findSubstring(chars, from: searchFrom, target: delim) {
+                let endPos = endIdx + delimChars.count
+                let text = String(chars[i..<endPos])
+                return (SyntaxToken(text: text, kind: .string), endPos, nil)
+            } else {
+                // Triple string continues past end of line
+                let text = String(chars[i...])
+                return (SyntaxToken(text: text, kind: .string), chars.count, delim)
+            }
+        }
+        return nil
     }
 
     // MARK: - String

@@ -60,6 +60,11 @@ struct SyntaxTheme: Identifiable, Equatable {
     let deletionBackground: HexColor
     let inlineAdditionBackground: HexColor
     let inlineDeletionBackground: HexColor
+    /// Background color for rows that are part of a modification pair
+    /// (deletion + addition of the same logical line). Distinct from pure
+    /// add/delete so the user can spot real edits at a glance.
+    let modificationBackground: HexColor
+    let inlineModificationBackground: HexColor
     let hunkHeaderBackground: HexColor
     let hunkHeaderText: HexColor
 
@@ -123,6 +128,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#FFEBE9"),
         inlineAdditionBackground: HexColor("#ACF2BD"),
         inlineDeletionBackground: HexColor("#FDB8C0"),
+        modificationBackground:       HexColor("#DDE7FA"),
+        inlineModificationBackground: HexColor("#A8C2F4"),
         hunkHeaderBackground: HexColor("#F0F4FF"),
         hunkHeaderText:      HexColor("#6E7781")
     )
@@ -146,6 +153,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#F8514926"),
         inlineAdditionBackground: HexColor("#2EA04380"),
         inlineDeletionBackground: HexColor("#F8514980"),
+        modificationBackground:       HexColor("#3B82F626"),
+        inlineModificationBackground: HexColor("#3B82F680"),
         hunkHeaderBackground: HexColor("#3E3D32"),
         hunkHeaderText:      HexColor("#90908A")
     )
@@ -169,6 +178,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#F8514926"),
         inlineAdditionBackground: HexColor("#2EA04380"),
         inlineDeletionBackground: HexColor("#F8514980"),
+        modificationBackground:       HexColor("#3B82F626"),
+        inlineModificationBackground: HexColor("#3B82F680"),
         hunkHeaderBackground: HexColor("#2C313C"),
         hunkHeaderText:      HexColor("#636D83")
     )
@@ -192,6 +203,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#FF555526"),
         inlineAdditionBackground: HexColor("#50FA7B80"),
         inlineDeletionBackground: HexColor("#FF555580"),
+        modificationBackground:       HexColor("#8BE9FD26"),
+        inlineModificationBackground: HexColor("#8BE9FD80"),
         hunkHeaderBackground: HexColor("#343746"),
         hunkHeaderText:      HexColor("#6272A4")
     )
@@ -215,6 +228,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#DC322F26"),
         inlineAdditionBackground: HexColor("#85990080"),
         inlineDeletionBackground: HexColor("#DC322F80"),
+        modificationBackground:       HexColor("#268BD226"),
+        inlineModificationBackground: HexColor("#268BD280"),
         hunkHeaderBackground: HexColor("#073642"),
         hunkHeaderText:      HexColor("#586E75")
     )
@@ -238,6 +253,8 @@ extension SyntaxTheme {
         deletionBackground:  HexColor("#FFEBE9"),
         inlineAdditionBackground: HexColor("#ACF2BD"),
         inlineDeletionBackground: HexColor("#FDB8C0"),
+        modificationBackground:       HexColor("#DDE7FA"),
+        inlineModificationBackground: HexColor("#A8C2F4"),
         hunkHeaderBackground: HexColor("#DDF4FF"),
         hunkHeaderText:      HexColor("#6E7781")
     )

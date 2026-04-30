@@ -49,8 +49,20 @@ struct DiffView: View {
                 placeholder(icon: "doc.text.magnifyingglass", title: "Select a file", color: .secondary)
             }
         }
-        .onChange(of: fileDiff?.id) { _ in currentChangeIdx = -1 }
-        .onChange(of: viewMode) { _ in currentChangeIdx = -1 }
+        .onChange(of: fileDiff?.id) { _ in
+            currentChangeIdx = -1
+            scheduleScrollToFirstChange()
+        }
+        .onChange(of: viewMode) { _ in
+            currentChangeIdx = -1
+            scheduleScrollToFirstChange()
+        }
+        // For file-content modes (Side by Side / Full File), anchors only exist once the
+        // remote file content has been fetched. Trigger the auto-scroll when content arrives,
+        // but only if we haven't already auto-scrolled (currentChangeIdx still -1).
+        .onChange(of: fileContentService.newContent) { _ in
+            if currentChangeIdx == -1 { scheduleScrollToFirstChange() }
+        }
         .background {
             Button("") { navigateChange(direction: -1) }
                 .keyboardShortcut(.upArrow, modifiers: .command)
@@ -90,7 +102,9 @@ struct DiffView: View {
         let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let leftLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .left)
         let rightLines = DisplayLineBuilder.buildDiffLines(fileDiff: fileDiff, side: .right)
-        dualPaneScroll(left: leftLines, right: rightLines, language: lang, theme: theme)
+        // Diff mode pairs hunks already; no connector ribbons needed.
+        dualPaneScroll(left: leftLines, right: rightLines,
+                       language: lang, theme: theme)
     }
 
     // MARK: - File Content Mode (Full File / Side by Side)
@@ -130,10 +144,12 @@ struct DiffView: View {
     private func fullFileContent(_ fileDiff: FileDiff) -> some View {
         let lang = LanguageConfig.detect(from: fileDiff.newPath)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
+        let modifiedLines = DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .right)
         let inlineMaps = DisplayLineBuilder.inlineRangesMap(fileDiff: fileDiff)
         let delMarkers = DisplayLineBuilder.deletionMarkerPositions(fileDiff: fileDiff)
         let lines = DisplayLineBuilder.buildFullFileLines(
             content: fileContentService.newContent ?? "", changedLines: addedLines,
+            modifiedLines: modifiedLines,
             inlineRangesMap: inlineMaps.new
         )
         scrollableContent {
@@ -148,18 +164,31 @@ struct DiffView: View {
         let deletedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .deletion)
         let addedLines = DisplayLineBuilder.changedLineNumbers(fileDiff: fileDiff, type: .addition)
         let inlineMaps = DisplayLineBuilder.inlineRangesMap(fileDiff: fileDiff)
-        let delMarkers = DisplayLineBuilder.deletionMarkerPositions(fileDiff: fileDiff)
+        // Each side renders its own raw, unpadded full-file content. The Bezier
+        // connector ribbons in the gap visually link the changed regions on each
+        // side — since the panes have different line counts, the ribbons swoop
+        // diagonally to map deletions on the left to additions on the right.
+        let oldModified = DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .left)
+        let newModified = DisplayLineBuilder.modifiedLineNumbers(fileDiff: fileDiff, side: .right)
         let oldLines = DisplayLineBuilder.buildFullFileLines(
-            content: fileContentService.oldContent ?? "", changedLines: deletedLines,
-            highlightType: .deletion, inlineRangesMap: inlineMaps.old
+            content: fileContentService.oldContent ?? "",
+            changedLines: deletedLines,
+            highlightType: .deletion,
+            modifiedLines: oldModified,
+            inlineRangesMap: inlineMaps.old
         )
         let newLines = DisplayLineBuilder.buildFullFileLines(
-            content: fileContentService.newContent ?? "", changedLines: addedLines,
-            highlightType: .addition, inlineRangesMap: inlineMaps.new
+            content: fileContentService.newContent ?? "",
+            changedLines: addedLines,
+            highlightType: .addition,
+            modifiedLines: newModified,
+            inlineRangesMap: inlineMaps.new
         )
-        dualPaneScroll(left: oldLines, right: newLines, leftLabel: "Old", rightLabel: "New",
+        let links = ConnectorLink.compute(fileDiff: fileDiff)
+        dualPaneScroll(left: oldLines, right: newLines,
+                       leftLabel: "Old", rightLabel: "New",
                        language: lang, theme: theme,
-                       rightDeletionMarkers: delMarkers)
+                       connectorLinks: links)
     }
 
     // MARK: - Scrollable Content Helpers
@@ -178,29 +207,116 @@ struct DiffView: View {
     }
 
     /// Two side-by-side CodePaneViews in a synced ScrollView with GeometryReader.
+    /// When `connectorLinks` is non-nil, a third pane is inserted in the middle
+    /// that renders cubic-Bézier ribbons connecting the change regions on each
+    /// (unaligned) side, scrolling in lock-step with the code panes.
     @ViewBuilder
     private func dualPaneScroll(
         left: [DisplayLine], right: [DisplayLine],
         leftLabel: String? = nil, rightLabel: String? = nil,
         language: LanguageConfig? = nil,
         theme: SyntaxTheme = .xcodeDefault,
-        rightDeletionMarkers: Set<Int> = []
+        rightDeletionMarkers: Set<Int> = [],
+        connectorLinks: [ConnectorLink]? = nil
     ) -> some View {
         GeometryReader { geo in
-            scrollableContent {
-                HStack(alignment: .top, spacing: 0) {
-                    CodePaneView(lines: left, label: leftLabel, language: language, theme: theme)
-                        .frame(width: geo.size.width / 2)
+            let showConnectors = connectorLinks != nil
+            let connectorWidth: CGFloat = showConnectors ? 28 : 1
+            let paneWidth = max((geo.size.width - connectorWidth) / 2, 0)
+            // When connectors are enabled we render labels in a separate band
+            // above the HStack so the connector canvas and code panes share an
+            // identical Y origin inside the ScrollView. Otherwise labels are
+            // rendered inline by `CodePaneView` (legacy behaviour).
+            let inlineLabels = !showConnectors
+            VStack(spacing: 0) {
+                if showConnectors && (leftLabel != nil || rightLabel != nil) {
+                    paneLabelBand(leftLabel: leftLabel, rightLabel: rightLabel,
+                                  paneWidth: paneWidth, gapWidth: connectorWidth)
+                }
+                scrollableContent {
+                    HStack(alignment: .top, spacing: 0) {
+                        CodePaneView(
+                            lines: left,
+                            label: inlineLabels ? leftLabel : nil,
+                            language: language, theme: theme
+                        )
+                        .frame(width: paneWidth)
 
-                    Rectangle()
-                        .fill(Color.secondary.opacity(0.2))
-                        .frame(width: 1)
+                        connectorPane(
+                            links: connectorLinks,
+                            leftCount: left.count, rightCount: right.count,
+                            width: connectorWidth, theme: theme
+                        )
 
-                    CodePaneView(lines: right, label: rightLabel, language: language, theme: theme,
-                                 deletionMarkerAfterLines: rightDeletionMarkers)
-                        .frame(width: geo.size.width / 2)
+                        CodePaneView(
+                            lines: right,
+                            label: inlineLabels ? rightLabel : nil,
+                            language: language, theme: theme,
+                            deletionMarkerAfterLines: rightDeletionMarkers
+                        )
+                        .frame(width: paneWidth)
+                    }
                 }
             }
+        }
+    }
+
+    /// Single label band rendered above the synced `ScrollView` when connectors
+    /// are enabled. Mirrors the styling that `CodePaneView` uses for inline labels.
+    /// Pinned to a fixed height so the middle gap-spacer (which has no intrinsic
+    /// height) cannot expand the band to fill the entire viewport.
+    @ViewBuilder
+    private func paneLabelBand(
+        leftLabel: String?, rightLabel: String?,
+        paneWidth: CGFloat, gapWidth: CGFloat
+    ) -> some View {
+        HStack(spacing: 0) {
+            paneLabel(leftLabel, color: .red)
+                .frame(width: paneWidth, alignment: .leading)
+            Color.clear.frame(width: gapWidth)
+            paneLabel(rightLabel, color: .green)
+                .frame(width: paneWidth, alignment: .leading)
+        }
+        .frame(height: paneLabelBandHeight)
+        .background(Color.secondary.opacity(0.05))
+    }
+
+    @ViewBuilder
+    private func paneLabel(_ text: String?, color: Color) -> some View {
+        if let text {
+            Text(text)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(color)
+                .padding(.horizontal, 8)
+        } else {
+            Color.clear
+        }
+    }
+
+    private var paneLabelBandHeight: CGFloat { 22 }
+
+    /// Renders the gap between the two code panes — either a thin divider line
+    /// (when no connector links are provided) or a wider canvas drawing Bézier
+    /// connector ribbons that swoop between the unaligned panes.
+    @ViewBuilder
+    private func connectorPane(
+        links: [ConnectorLink]?,
+        leftCount: Int, rightCount: Int,
+        width: CGFloat, theme: SyntaxTheme
+    ) -> some View {
+        if let links {
+            ConnectorRibbonsView(
+                links: links,
+                lineHeight: codeLineHeight,
+                theme: theme,
+                width: width,
+                totalHeight: CGFloat(max(leftCount, rightCount)) * codeLineHeight + 4
+            )
+        } else {
+            Rectangle()
+                .fill(Color.secondary.opacity(0.2))
+                .frame(width: width)
         }
     }
 
@@ -320,5 +436,29 @@ struct DiffView: View {
         currentChangeIdx = newIdx
         scrollTarget = anchors[newIdx]
         scrollTrigger += 1
+    }
+
+    /// Schedules an auto-scroll to the first change in the current file after a short
+    /// delay so SwiftUI can lay out the anchor `.id()`s before `scrollTo` fires.
+    /// No-op when the file has no changes or, for file-content modes, when content
+    /// hasn't been fetched yet (we'll be re-invoked by the newContent onChange).
+    private func scheduleScrollToFirstChange() {
+        guard let fileDiff = fileDiff else { return }
+        let anchors = changeAnchors(for: fileDiff)
+        guard !anchors.isEmpty else { return }
+
+        // For file-content modes, wait until content is loaded — otherwise the
+        // anchor IDs aren't in the rendered hierarchy yet.
+        if viewMode != .diff && fileContentService.newContent == nil { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            // Re-check that selection / mode haven't changed under us by recomputing.
+            guard let current = self.fileDiff else { return }
+            let currentAnchors = self.changeAnchors(for: current)
+            guard let first = currentAnchors.first else { return }
+            self.currentChangeIdx = 0
+            self.scrollTarget = first
+            self.scrollTrigger += 1
+        }
     }
 }

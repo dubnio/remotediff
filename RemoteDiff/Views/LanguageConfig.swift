@@ -14,6 +14,7 @@ struct LanguageConfig {
     let commentBlockEnd: String?       // e.g. "*/"
     let stringDelimiters: [Character]  // e.g. ["\"", "'"]
     let templateStrings: Bool          // backtick strings (JS/TS)
+    let tripleStringDelimiters: [String] // e.g. ["\"\"\"", "'''"] for Python
 
     init(name: String,
          keywords: Set<String> = [],
@@ -23,7 +24,8 @@ struct LanguageConfig {
          commentBlockStart: String? = "/*",
          commentBlockEnd: String? = "*/",
          stringDelimiters: [Character] = ["\"", "'"],
-         templateStrings: Bool = false) {
+         templateStrings: Bool = false,
+         tripleStringDelimiters: [String] = []) {
         self.name = name
         self.keywords = keywords
         self.typeKeywords = typeKeywords
@@ -33,6 +35,7 @@ struct LanguageConfig {
         self.commentBlockEnd = commentBlockEnd
         self.stringDelimiters = stringDelimiters
         self.templateStrings = templateStrings
+        self.tripleStringDelimiters = tripleStringDelimiters
     }
 }
 
@@ -255,7 +258,8 @@ extension LanguageConfig {
         commentLine: ["#"],
         commentBlockStart: nil,
         commentBlockEnd: nil,
-        stringDelimiters: ["\"", "'"]
+        stringDelimiters: ["\"", "'"],
+        tripleStringDelimiters: ["\"\"\"", "'''"]
     )
 
     // MARK: Rust

@@ -109,6 +109,10 @@ struct CodePaneView: View {
         paraStyle.paragraphSpacing = 0
         paraStyle.paragraphSpacingBefore = 0
 
+        // Multi-line carry-over state for block comments and triple-quoted strings.
+        var inBlockComment = false
+        var inTripleString: String? = nil
+
         for (i, line) in lines.enumerated() {
             let lineAttr = NSMutableAttributedString()
 
@@ -135,8 +139,13 @@ struct CodePaneView: View {
                     .paragraphStyle: paraStyle,
                 ]))
 
-                // Syntax-highlighted code
-                appendHighlightedCode(line.text, to: lineAttr, font: codeFont, paraStyle: paraStyle)
+                // Syntax-highlighted code (with multi-line state tracking)
+                let newState = appendHighlightedCode(
+                    line.text, to: lineAttr, font: codeFont, paraStyle: paraStyle,
+                    inBlockComment: inBlockComment, inTripleString: inTripleString
+                )
+                inBlockComment = newState.inBlockComment
+                inTripleString = newState.inTripleString
             }
 
             // Append newline (except last line) BEFORE applying background
@@ -158,9 +167,12 @@ struct CodePaneView: View {
 
             // Apply inline change highlights on top of line background
             if !line.inlineRanges.isEmpty && !line.isHunkHeader {
-                let inlineBg = line.type == .deletion
-                    ? nsColor(theme.inlineDeletionBackground)
-                    : nsColor(theme.inlineAdditionBackground)
+                let inlineBg: NSColor
+                switch line.type {
+                case .deletion:     inlineBg = nsColor(theme.inlineDeletionBackground)
+                case .modification: inlineBg = nsColor(theme.inlineModificationBackground)
+                default:            inlineBg = nsColor(theme.inlineAdditionBackground)
+                }
                 // Gutter prefix: "NNNN " (5) + "~ " (2) = 7 characters
                 let gutterLen = 7
                 for range in line.inlineRanges {
@@ -177,21 +189,30 @@ struct CodePaneView: View {
         return result
     }
 
-    private func appendHighlightedCode(_ text: String, to result: NSMutableAttributedString,
-                                       font: NSFont, paraStyle: NSParagraphStyle) {
+    /// Appends syntax-highlighted code for a single line, threading multi-line state
+    /// (block comments, triple-quoted strings) through. Returns the post-line state.
+    private func appendHighlightedCode(
+        _ text: String, to result: NSMutableAttributedString,
+        font: NSFont, paraStyle: NSParagraphStyle,
+        inBlockComment: Bool, inTripleString: String?
+    ) -> (inBlockComment: Bool, inTripleString: String?) {
         guard let language = language, !text.isEmpty else {
             result.append(NSAttributedString(string: text, attributes: [
                 .font: font, .foregroundColor: nsColor(theme.plain), .paragraphStyle: paraStyle,
             ]))
-            return
+            return (inBlockComment, inTripleString)
         }
 
-        let tokens = SyntaxHighlighter.tokenize(line: text, language: language)
+        let tokenizeResult = SyntaxHighlighter.tokenizeWithState(
+            line: text, language: language,
+            inBlockComment: inBlockComment, inTripleString: inTripleString
+        )
+        let tokens = tokenizeResult.tokens
         guard !tokens.isEmpty else {
             result.append(NSAttributedString(string: text, attributes: [
                 .font: font, .foregroundColor: nsColor(theme.plain), .paragraphStyle: paraStyle,
             ]))
-            return
+            return (tokenizeResult.inBlockComment, tokenizeResult.inTripleString)
         }
 
         for token in tokens {
@@ -201,6 +222,7 @@ struct CodePaneView: View {
                 .paragraphStyle: paraStyle,
             ]))
         }
+        return (tokenizeResult.inBlockComment, tokenizeResult.inTripleString)
     }
 
     // MARK: - NSColor Helpers
@@ -211,26 +233,29 @@ struct CodePaneView: View {
 
     private func nsIndicatorColor(for type: DiffLineType) -> NSColor {
         switch type {
-        case .addition: return .systemGreen
-        case .deletion: return .systemRed
-        default: return nsColor(theme.gutterText).withAlphaComponent(0.5)
+        case .addition:     return .systemGreen
+        case .deletion:     return .systemRed
+        case .modification: return .systemBlue
+        default:            return nsColor(theme.gutterText).withAlphaComponent(0.5)
         }
     }
 
     private func nsLineBackground(for type: DiffLineType) -> NSColor? {
         switch type {
-        case .addition: return nsColor(theme.additionBackground)
-        case .deletion: return nsColor(theme.deletionBackground)
-        case .empty:    return nsColor(theme.editorBackground).withAlphaComponent(0.5)
-        case .context:  return nil
+        case .addition:     return nsColor(theme.additionBackground)
+        case .deletion:     return nsColor(theme.deletionBackground)
+        case .modification: return nsColor(theme.modificationBackground)
+        case .empty:        return nsColor(theme.editorBackground).withAlphaComponent(0.5)
+        case .context:      return nil
         }
     }
 
     private func indicator(for type: DiffLineType) -> String {
         switch type {
-        case .addition: return "+"
-        case .deletion: return "-"
-        default: return " "
+        case .addition:     return "+"
+        case .deletion:     return "-"
+        case .modification: return "~"
+        default:            return " "
         }
     }
 }
