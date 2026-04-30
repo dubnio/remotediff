@@ -6,13 +6,25 @@ Project guidelines for AI assistants working on RemoteDiff.
 
 ```bash
 swift build          # Build the project
-swift test           # Run all tests (121 tests across 7 suites)
+swift test           # Run all tests (165 tests across 7 suites)
 ./scripts/build-app.sh  # Build .app bundle + DMG installer (or .zip fallback)
 ```
 
 SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when adding/removing/renaming Swift files, update the pbxproj too.
 
 **Distribution**: `build-app.sh` produces a DMG at `.build/release/RemoteDiff-<version>.dmg` with the classic drag-to-Applications installer (app icon + arrow + Applications symlink). Requires `create-dmg` (`brew install create-dmg`); falls back to `.zip` if not installed. Background image is at `scripts/dmg-resources/dmg-background.png` (regenerate with `python3 scripts/create-dmg-background.py`).
+
+**Code signing & notarisation**: `build-app.sh` auto-detects a `Developer ID Application` certificate in the keychain. If found, it signs with the Hardened Runtime + `scripts/entitlements.plist` and (when a `notarytool` keychain profile exists) submits the DMG to Apple, waits for acceptance, and staples the ticket. If no Developer ID cert is found, it falls back to ad-hoc signing.
+
+One-time setup on a new machine: `scripts/setup-signing.sh` walks through:
+1. Verifying a `Developer ID Application` cert is in the keychain (Xcode → Settings → Accounts → Manage Certificates… → + → Developer ID Application).
+2. Creating a notarisation keychain profile via `xcrun notarytool store-credentials` (needs Apple ID, Team ID, and an [app-specific password](https://appleid.apple.com/account/manage)).
+
+Relevant env vars (override the defaults if needed):
+- `RD_SIGN_IDENTITY` — explicit codesign identity (full SHA-1 or `Developer ID Application: …` name).
+- `RD_NOTARY_PROFILE` — keychain profile name for `notarytool` (default `RemoteDiffNotary`).
+
+The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxed** (required for SSH/`~/.ssh` access) and disables library validation (so SSH can load its askpass helper).
 
 ## Architecture
 
@@ -87,20 +99,25 @@ All dual-pane modes use `dualPaneScroll()` (shared `ScrollView` via `GeometryRea
 | Mode | Data Source | Rendering |
 |------|------------|-----------|
 | **Diff** | `SSHService.fileDiffs` → `DisplayLineBuilder.buildDiffLines()` | `dualPaneScroll` (left/right) |
-| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` | `dualPaneScroll` with Old/New labels |
-| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` | `scrollableContent` (single pane) |
+| **Side by Side** | `FileContentService` old/new content → `DisplayLineBuilder.buildFullFileLines()` (with `modifiedLines`) + `ConnectorLink.compute()` | `dualPaneScroll` with Old/New labels and `ConnectorRibbonsView` in the gap |
+| **Full File** | `FileContentService` new content → `DisplayLineBuilder.buildFullFileLines()` (with `modifiedLines`) | `scrollableContent` (single pane) |
+
+**Side-by-Side connector ribbons.** Each pane renders its own raw, unpadded full-file content (different line counts on each side). `ConnectorLink.compute(fileDiff:)` walks the unified diff and produces, for each contiguous deletion/addition cluster, a link with **separate old-line and new-line ranges**. `ConnectorRibbonsView` (canvas-based) draws cubic Bézier ribbons connecting those Y ranges in the 28 px gap between panes — wedge-shaped for pure adds/dels, trapezoidal for modifications. Width is an explicit parameter; height equals the taller pane.
+
+**Modification highlighting.** `DiffLineType` includes a display-only `.modification` case used by `buildFullFileLines` when a line number is in the `modifiedLines` set (computed via `DisplayLineBuilder.modifiedLineNumbers(fileDiff:side:)`). Themes carry a `modificationBackground` + `inlineModificationBackground` (typically blue) so modification rows render visually distinct from pure adds (green) / dels (red). Indicator glyph is `~`.
 
 ## Testing
 
-Tests in `RemoteDiffTests/`:
+Tests in `RemoteDiffTests/` (165 total across 7 suites):
 - `DiffParserTests` — 19 tests for unified diff parsing including untracked files
-- `DisplayLineBuilderTests` — 30 tests for display line building, inline ranges, deletion markers, hunk formatting
+- `DisplayLineBuilderTests` — 61 tests covering: display line building, inline ranges, deletion markers, hunk formatting, aligned side-by-side, `ChangeRegion.compute`, `ConnectorLink.compute` (incl. interleaved del/add collapse), `modifiedLineNumbers`, and `buildFullFileLines` modified-lines precedence
 - `SSHConfigTests` — 5 tests for SSH config parsing
-- `SyntaxHighlighterTests` — 32 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, edge cases)
+- `SyntaxHighlighterTests` — 39 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, **Python triple-quoted strings with multi-line state**, edge cases)
 - `SyntaxThemeTests` — 22 tests for theme registry, hex color parsing, built-in theme validation, dark/light classification
 - `DeepLinkTests` — 13 tests for URL scheme parsing, user@host format, edge cases, invalid inputs
+- `FileGroupTests` — 6 tests for sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
 
-Run `swift test` after modifying `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, or `DeepLink`.
+Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, or the `FileGroup` model in `SidebarView.swift`.
 
 ## SSH Authentication
 

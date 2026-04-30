@@ -7,6 +7,61 @@ VERSION="1.0.1"
 BUILD_DIR=".build/release"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENTITLEMENTS="$SCRIPT_DIR/entitlements.plist"
+DMG_BG="$SCRIPT_DIR/dmg-resources/dmg-background.png"
+
+# ----------------------------------------------------------------------------
+# Signing identity detection
+# ----------------------------------------------------------------------------
+#
+# Resolution order:
+#   1. $RD_SIGN_IDENTITY              — explicit env var (full SHA-1 or name)
+#   2. First "Developer ID Application: …" identity in the keychain
+#   3. Ad-hoc ("-")                   — fallback for users without a paid
+#                                       Developer Program account.
+#
+# Notarisation only runs when both a Developer ID cert AND a stored notarytool
+# credential profile (default: "RemoteDiffNotary") are available.
+# ----------------------------------------------------------------------------
+
+DEVELOPER_ID_CERT=""
+if [ -n "${RD_SIGN_IDENTITY:-}" ]; then
+    DEVELOPER_ID_CERT="$RD_SIGN_IDENTITY"
+else
+    DEVELOPER_ID_CERT=$(security find-identity -p codesigning -v 2>/dev/null \
+        | grep -E '"Developer ID Application:' \
+        | head -1 \
+        | sed -E 's/.*"(Developer ID Application:[^"]+)".*/\1/')
+fi
+
+NOTARY_PROFILE="${RD_NOTARY_PROFILE:-RemoteDiffNotary}"
+HAS_NOTARY=false
+if [ -n "$DEVELOPER_ID_CERT" ] && [ "$DEVELOPER_ID_CERT" != "-" ]; then
+    if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" \
+        >/dev/null 2>&1; then
+        HAS_NOTARY=true
+    fi
+fi
+
+if [ -n "$DEVELOPER_ID_CERT" ]; then
+    echo "🔑 Signing identity: $DEVELOPER_ID_CERT"
+    if $HAS_NOTARY; then
+        echo "📨 Notary profile:   $NOTARY_PROFILE  (will notarise + staple)"
+    else
+        echo "ℹ️  No notary profile '$NOTARY_PROFILE' found — will sign but skip notarisation."
+        echo "   Run: scripts/setup-signing.sh to configure."
+    fi
+else
+    echo "⚠️  No Developer ID Application cert found — falling back to ad-hoc signing."
+    echo "   Run: scripts/setup-signing.sh for instructions."
+    DEVELOPER_ID_CERT="-"
+fi
+
+# ----------------------------------------------------------------------------
+# Build
+# ----------------------------------------------------------------------------
+
 echo "🔨 Building release..."
 swift build -c release
 
@@ -98,17 +153,39 @@ chmod +x "$APP_BUNDLE/Contents/Resources/remotediff"
 cp "scripts/remotediff-askpass" "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
 chmod +x "$APP_BUNDLE/Contents/Resources/remotediff-askpass"
 
-# Ad-hoc code sign (must be AFTER all files are in the bundle)
+# ----------------------------------------------------------------------------
+# Code signing
+# ----------------------------------------------------------------------------
+#
+# When we have a real Developer ID cert we enable the Hardened Runtime and
+# pass an entitlements plist (required for notarisation). Ad-hoc signing
+# falls back to the previous, simpler invocation.
+# ----------------------------------------------------------------------------
+
 echo "🔏 Code signing..."
-codesign --force --deep --sign - "$APP_BUNDLE"
+if [ "$DEVELOPER_ID_CERT" != "-" ]; then
+    codesign --force --deep \
+        --sign "$DEVELOPER_ID_CERT" \
+        --options runtime \
+        --entitlements "$ENTITLEMENTS" \
+        --timestamp \
+        "$APP_BUNDLE"
+
+    echo "🔍 Verifying signature..."
+    codesign --verify --strict --verbose=2 "$APP_BUNDLE"
+else
+    codesign --force --deep --sign - "$APP_BUNDLE"
+fi
 
 echo "✅ App bundle created: $APP_BUNDLE"
 echo "💡 To install the CLI: $APP_BUNDLE/Contents/Resources/remotediff --install"
 
-# Create DMG with drag-to-Applications installer
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-DMG_BG="$SCRIPT_DIR/dmg-resources/dmg-background.png"
+# ----------------------------------------------------------------------------
+# DMG / ZIP packaging
+# ----------------------------------------------------------------------------
 
+DMG_PATH=""
+ZIP_PATH=""
 if command -v create-dmg &> /dev/null; then
     echo "📀 Creating DMG..."
     DMG_PATH="$BUILD_DIR/$APP_NAME-$VERSION.dmg"
@@ -126,24 +203,77 @@ if command -v create-dmg &> /dev/null; then
         --no-internet-enable
     )
 
-    # Add background image if it exists
     if [ -f "$DMG_BG" ]; then
         DMG_ARGS+=(--background "$DMG_BG")
     fi
 
     create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_BUNDLE"
     echo "✅ DMG created: $DMG_PATH"
-    echo ""
-    echo "⚠️  This app is ad-hoc signed (no Apple Developer ID)."
-    echo "   If macOS says it's damaged, the recipient should run:"
-    echo "   xattr -cr /Applications/RemoteDiff.app"
+
+    # Sign the DMG container itself with the Developer ID cert so that
+    # `spctl --assess --type install` also accepts the .dmg file directly
+    # (the .app inside is already signed; this just covers the disk image).
+    if [ "$DEVELOPER_ID_CERT" != "-" ]; then
+        echo "🔏 Signing DMG..."
+        codesign --force --sign "$DEVELOPER_ID_CERT" --timestamp "$DMG_PATH"
+        codesign --verify --verbose=2 "$DMG_PATH"
+    fi
 else
     echo "⚠️  'create-dmg' not found. Install with: brew install create-dmg"
     echo "📀 Creating ZIP instead..."
     ZIP_PATH="$BUILD_DIR/$APP_NAME-$VERSION.zip"
     rm -f "$ZIP_PATH"
-    cd "$BUILD_DIR" && zip -r -y "$APP_NAME-$VERSION.zip" "$APP_NAME.app"
-    echo "✅ ZIP created: $BUILD_DIR/$APP_NAME-$VERSION.zip"
+    (cd "$BUILD_DIR" && zip -qr -y "$APP_NAME-$VERSION.zip" "$APP_NAME.app")
+    echo "✅ ZIP created: $ZIP_PATH"
+fi
+
+# ----------------------------------------------------------------------------
+# Notarisation (only when both a Developer ID cert and a notary profile exist)
+# ----------------------------------------------------------------------------
+
+if $HAS_NOTARY; then
+    if [ -n "$DMG_PATH" ]; then
+        TARGET="$DMG_PATH"
+    else
+        TARGET="$ZIP_PATH"
+    fi
+
+    echo ""
+    echo "📨 Submitting $(basename "$TARGET") to Apple for notarisation..."
+    echo "   (This typically takes 1–5 minutes.)"
+    if xcrun notarytool submit "$TARGET" \
+        --keychain-profile "$NOTARY_PROFILE" \
+        --wait; then
+        echo "✅ Notarisation accepted."
+
+        # Stapling embeds the ticket so Gatekeeper trusts the file even offline.
+        # Stapling .zip is not supported — we'd need to re-zip post-staple.
+        if [ -n "$DMG_PATH" ]; then
+            echo "📎 Stapling notarisation ticket to DMG..."
+            xcrun stapler staple "$DMG_PATH"
+            xcrun stapler validate "$DMG_PATH"
+            echo "✅ Ticket stapled."
+        else
+            # Staple the .app, then re-zip so the ticket travels with it.
+            echo "📎 Stapling notarisation ticket to .app..."
+            xcrun stapler staple "$APP_BUNDLE"
+            xcrun stapler validate "$APP_BUNDLE"
+            rm -f "$ZIP_PATH"
+            (cd "$BUILD_DIR" && zip -qr -y "$APP_NAME-$VERSION.zip" "$APP_NAME.app")
+            echo "✅ Ticket stapled. ZIP rebuilt: $ZIP_PATH"
+        fi
+    else
+        echo "❌ Notarisation failed. Check logs with:"
+        echo "   xcrun notarytool log <submission-id> --keychain-profile $NOTARY_PROFILE"
+        exit 1
+    fi
+elif [ "$DEVELOPER_ID_CERT" != "-" ]; then
+    echo ""
+    echo "ℹ️  App is Developer ID signed but NOT notarised."
+    echo "   Recipients on macOS 10.15+ will see a Gatekeeper warning the first"
+    echo "   time they open it (right-click → Open to bypass)."
+    echo "   To enable notarisation: scripts/setup-signing.sh"
+else
     echo ""
     echo "⚠️  This app is ad-hoc signed (no Apple Developer ID)."
     echo "   If macOS says it's damaged, the recipient should run:"
