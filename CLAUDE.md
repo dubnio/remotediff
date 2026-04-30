@@ -14,6 +14,18 @@ SPM is the primary build system. There is also a `RemoteDiff.xcodeproj` — when
 
 **Distribution**: `build-app.sh` produces a DMG at `.build/release/RemoteDiff-<version>.dmg` with the classic drag-to-Applications installer (app icon + arrow + Applications symlink). Requires `create-dmg` (`brew install create-dmg`); falls back to `.zip` if not installed. Background image is at `scripts/dmg-resources/dmg-background.png` (regenerate with `python3 scripts/create-dmg-background.py`).
 
+**Code signing & notarisation**: `build-app.sh` auto-detects a `Developer ID Application` certificate in the keychain. If found, it signs with the Hardened Runtime + `scripts/entitlements.plist` and (when a `notarytool` keychain profile exists) submits the DMG to Apple, waits for acceptance, and staples the ticket. If no Developer ID cert is found, it falls back to ad-hoc signing.
+
+One-time setup on a new machine: `scripts/setup-signing.sh` walks through:
+1. Verifying a `Developer ID Application` cert is in the keychain (Xcode → Settings → Accounts → Manage Certificates… → + → Developer ID Application).
+2. Creating a notarisation keychain profile via `xcrun notarytool store-credentials` (needs Apple ID, Team ID, and an [app-specific password](https://appleid.apple.com/account/manage)).
+
+Relevant env vars (override the defaults if needed):
+- `RD_SIGN_IDENTITY` — explicit codesign identity (full SHA-1 or `Developer ID Application: …` name).
+- `RD_NOTARY_PROFILE` — keychain profile name for `notarytool` (default `RemoteDiffNotary`).
+
+The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxed** (required for SSH/`~/.ssh` access) and disables library validation (so SSH can load its askpass helper).
+
 ## Architecture
 
 - **SwiftUI macOS app**, min deployment target macOS 13

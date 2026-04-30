@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        RemoteDiff is intentionally NOT sandboxed because it spawns /usr/bin/ssh
+        and reads from the user's ~/.ssh config to talk to remote git repositories.
+        App Sandbox would block both. The app is still notarised by Apple and runs
+        with the Hardened Runtime enabled.
+    -->
+    <key>com.apple.security.app-sandbox</key>
+    <false/>
+
+    <!--
+        The app launches /usr/bin/ssh as a child process. The Hardened Runtime
+        allows this by default (we don't need allow-jit / allow-unsigned-memory),
+        but SSH may load helper binaries (askpass) and dynamic libraries that
+        aren't signed by Apple, so we permit unsigned dyld loads.
+    -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+</dict>
+</plist>
