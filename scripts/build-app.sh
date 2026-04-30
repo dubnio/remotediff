@@ -209,6 +209,15 @@ if command -v create-dmg &> /dev/null; then
 
     create-dmg "${DMG_ARGS[@]}" "$DMG_PATH" "$APP_BUNDLE"
     echo "✅ DMG created: $DMG_PATH"
+
+    # Sign the DMG container itself with the Developer ID cert so that
+    # `spctl --assess --type install` also accepts the .dmg file directly
+    # (the .app inside is already signed; this just covers the disk image).
+    if [ "$DEVELOPER_ID_CERT" != "-" ]; then
+        echo "🔏 Signing DMG..."
+        codesign --force --sign "$DEVELOPER_ID_CERT" --timestamp "$DMG_PATH"
+        codesign --verify --verbose=2 "$DMG_PATH"
+    fi
 else
     echo "⚠️  'create-dmg' not found. Install with: brew install create-dmg"
     echo "📀 Creating ZIP instead..."
