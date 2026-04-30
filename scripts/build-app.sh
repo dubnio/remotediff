@@ -3,7 +3,7 @@ set -e
 
 APP_NAME="RemoteDiff"
 BUNDLE_ID="com.evargas.RemoteDiff"
-VERSION="1.0.1"
+VERSION="1.1.0"
 BUILD_DIR=".build/release"
 APP_BUNDLE="$BUILD_DIR/$APP_NAME.app"
 
