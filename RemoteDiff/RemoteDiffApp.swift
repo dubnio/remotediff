@@ -20,6 +20,14 @@ struct RemoteDiffApp: App {
                 .onOpenURL { url in
                     if let link = DeepLink.parse(from: url) {
                         pendingDeepLink = link
+                    } else {
+                        let alert = NSAlert()
+                        alert.alertStyle = .warning
+                        alert.messageText = "Ignored invalid remotediff:// link"
+                        alert.informativeText = "This remotediff:// link is malformed or contains characters RemoteDiff does not accept."
+                        alert.addButton(withTitle: "OK")
+                        NSApplication.shared.activate(ignoringOtherApps: true)
+                        alert.runModal()
                     }
                 }
         }

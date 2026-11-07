@@ -34,6 +34,7 @@
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
 		AA000031 /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000031 /* DeepLink.swift */; };
 		AA000032 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000032 /* DeepLinkTests.swift */; };
+		AA000035 /* SSHServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000035 /* SSHServiceTests.swift */; };
 		AA000033 /* FileGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000033 /* FileGroupTests.swift */; };
 		AA000034 /* ConnectorRibbonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ConnectorRibbonsView.swift */; };
 /* End PBXBuildFile section */
@@ -77,6 +78,7 @@
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000031 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		AB000032 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		AB000035 /* SSHServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHServiceTests.swift; sourceTree = "<group>"; };
 		AB000033 /* FileGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGroupTests.swift; sourceTree = "<group>"; };
 		AB000034 /* ConnectorRibbonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectorRibbonsView.swift; sourceTree = "<group>"; };
 		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -159,6 +161,7 @@
 				AB000024 /* SyntaxHighlighterTests.swift */,
 				AB000028 /* SyntaxThemeTests.swift */,
 				AB000032 /* DeepLinkTests.swift */,
+				AB000035 /* SSHServiceTests.swift */,
 				AB000033 /* FileGroupTests.swift */,
 			);
 			path = RemoteDiffTests;
@@ -320,6 +323,7 @@
 				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
 				AA000028 /* SyntaxThemeTests.swift in Sources */,
 				AA000032 /* DeepLinkTests.swift in Sources */,
+				AA000035 /* SSHServiceTests.swift in Sources */,
 				AA000033 /* FileGroupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

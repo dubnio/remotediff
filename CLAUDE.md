@@ -6,7 +6,7 @@ Project guidelines for AI assistants working on RemoteDiff.
 
 ```bash
 swift build          # Build the project
-swift test           # Run all tests (165 tests across 7 suites)
+swift test           # Run all tests (199 tests across 8 suites)
 ./scripts/build-app.sh  # Build .app bundle + DMG installer (or .zip fallback)
 ```
 
@@ -67,8 +67,9 @@ The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxe
 - **Synced scrolling**: Dual-pane views (Diff, Side by Side) share a single `ScrollView` so both panes scroll together. `dualPaneScroll()` in `DiffView` encapsulates this pattern.
 - **Change navigation**: `ScrollViewReader` + `scrollTo()` drives ⌘↑/⌘↓ jump-to-change. Anchors are hunk IDs in diff mode, grouped changed line IDs in file modes. `changeAnchors(for:)` computes targets per view mode.
 - **Deep linking**: `RemoteDiffApp` owns `pendingDeepLink` state, passes as `@Binding` to `ContentView`. On `.onOpenURL`, the URL is parsed via `DeepLink.parse(from:)`. `ContentView.handleDeepLink()` finds or creates a matching connection+repo, selects it, and auto-fetches.
+- **Remote script safety**: anything interpolated into a script for `runSSHBash` goes through `SSHService.shellQuote` / `shellQuotePath`; script builders are static on `SSHService` so they're testable; deep-link values are validated in `DeepLink.parse`.
 - **`DisplayLineBuilder`** is pure logic with no UI dependencies — fully unit tested.
-- Script building centralized in `SSHService.buildDiffScript()` / `buildPollScript()`.
+- Script building centralized in `SSHService.buildDiffScript()` / `buildPollScript()` / `buildBranchScript()` / `buildFileContentScript()`.
 - SSH execution uses `runSSHBash()` which pipes scripts via stdin to avoid quoting issues.
 - `ControlMasterWatcher` reuses `SSHService.runSSHBash()` with extra ControlPath args.
 - `FileContentService` fetches old + new file content in a single SSH call using a separator.
@@ -108,16 +109,17 @@ All dual-pane modes use `dualPaneScroll()` (shared `ScrollView` via `GeometryRea
 
 ## Testing
 
-Tests in `RemoteDiffTests/` (165 total across 7 suites):
+Tests in `RemoteDiffTests/` (199 total across 8 suites):
 - `DiffParserTests` — 19 tests for unified diff parsing including untracked files
 - `DisplayLineBuilderTests` — 61 tests covering: display line building, inline ranges, deletion markers, hunk formatting, aligned side-by-side, `ChangeRegion.compute`, `ConnectorLink.compute` (incl. interleaved del/add collapse), `modifiedLineNumbers`, and `buildFullFileLines` modified-lines precedence
 - `SSHConfigTests` — 5 tests for SSH config parsing
 - `SyntaxHighlighterTests` — 39 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, **Python triple-quoted strings with multi-line state**, edge cases)
 - `SyntaxThemeTests` — 22 tests for theme registry, hex color parsing, built-in theme validation, dark/light classification
-- `DeepLinkTests` — 13 tests for URL scheme parsing, user@host format, edge cases, invalid inputs
+- `DeepLinkTests` — 27 tests for URL scheme parsing, user@host format, edge cases, invalid inputs, host/ref/path injection validation
+- `SSHServiceTests` — 20 tests for `shellQuote`, `shellQuotePath`, and `buildDiffScript` / `buildPollScript` / `buildBranchScript` / `buildFileContentScript` output
 - `FileGroupTests` — 6 tests for sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
 
-Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, or the `FileGroup` model in `SidebarView.swift`.
+Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, the `SSHService` script builders / shell quoting, or the `FileGroup` model in `SidebarView.swift`.
 
 ## SSH Authentication
 
