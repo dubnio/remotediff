@@ -419,7 +419,7 @@ struct SidebarView: View {
             remoteBranch = ""
             return
         }
-        let script = "cd \(repoPath) && git rev-parse --abbrev-ref HEAD"
+        let script = SSHService.buildBranchScript(repoPath: repoPath)
         SSHService.runSSHBash(host: selectedHost, script: script) { [self] result in
             DispatchQueue.main.async {
                 switch result {

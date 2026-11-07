@@ -85,7 +85,7 @@ class ControlMasterWatcher: ObservableObject {
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
             "-N",
-            host
+            "--", host
         ]
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
@@ -106,7 +106,7 @@ class ControlMasterWatcher: ObservableObject {
     private func verifyMasterAndStartPolling() {
         let check = Process()
         check.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", host]
+        check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", "--", host]
         check.standardOutput = FileHandle.nullDevice
         check.standardError = FileHandle.nullDevice
 
@@ -132,7 +132,7 @@ class ControlMasterWatcher: ObservableObject {
     private func terminateMaster() {
         let exit = Process()
         exit.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        exit.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "exit", host]
+        exit.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "exit", "--", host]
         exit.standardOutput = FileHandle.nullDevice
         exit.standardError = FileHandle.nullDevice
         try? exit.run()
