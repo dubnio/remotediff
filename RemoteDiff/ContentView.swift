@@ -138,6 +138,24 @@ struct ContentView: View {
             }
         }
 
+        // Links come from outside the app: confirm before saving a host/repo we don't already have
+        if matchedRepo == nil {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            let shownPath = link.repoPath.count > 200 ? String(link.repoPath.prefix(200)) + "…" : link.repoPath
+            if matchedConnection == nil {
+                alert.messageText = "Connect to new host \"\(link.host)\"?"
+                alert.informativeText = "A link from outside RemoteDiff wants to add this host and run git on it over SSH. Only continue if you recognise and trust this host.\n\nPath: \(shownPath)\nRef: \(link.gitRef)"
+            } else {
+                alert.messageText = "Add repository on \"\(link.host)\"?"
+                alert.informativeText = "A link from outside RemoteDiff wants to add a repository on this saved host and run git in it.\n\nPath: \(shownPath)\nRef: \(link.gitRef)"
+            }
+            alert.addButton(withTitle: "Cancel")
+            alert.addButton(withTitle: "Add & Connect")
+            NSApplication.shared.activate(ignoringOtherApps: true)
+            guard alert.runModal() == .alertSecondButtonReturn else { return }
+        }
+
         // If no exact match, create connection + repo
         if matchedRepo == nil {
             if matchedConnection == nil {

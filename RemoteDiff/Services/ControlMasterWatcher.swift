@@ -75,18 +75,25 @@ class ControlMasterWatcher: ObservableObject {
 
     // MARK: - ControlMaster
 
-    private func startMaster() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = [
+    /// ssh argv for the ControlMaster. Host-key and auth options come first (ssh keeps the first value).
+    static func masterArguments(host: String, socketPath: String, allowedHosts: Set<String>) -> [String] {
+        SSHService.hostKeyOptionArgs + SSHService.authOptionArgs(host: host, allowedHosts: allowedHosts) + [
             "-o", "ControlMaster=yes",
             "-o", "ControlPath=\(socketPath)",
             "-o", "ControlPersist=yes",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
             "-N",
-            host
+            "--", host
         ]
+    }
+
+    private func startMaster() {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = Self.masterArguments(host: host, socketPath: socketPath,
+                                                 allowedHosts: SSHService.passwordAuthHosts)
+        process.environment = SSHService.sshEnvironment()
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
@@ -106,7 +113,7 @@ class ControlMasterWatcher: ObservableObject {
     private func verifyMasterAndStartPolling() {
         let check = Process()
         check.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", host]
+        check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", "--", host]
         check.standardOutput = FileHandle.nullDevice
         check.standardError = FileHandle.nullDevice
 
@@ -132,7 +139,7 @@ class ControlMasterWatcher: ObservableObject {
     private func terminateMaster() {
         let exit = Process()
         exit.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        exit.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "exit", host]
+        exit.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "exit", "--", host]
         exit.standardOutput = FileHandle.nullDevice
         exit.standardError = FileHandle.nullDevice
         try? exit.run()

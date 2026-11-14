@@ -17,6 +17,7 @@
 		AA000010 /* DiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010 /* DiffView.swift */; };
 		AA000011 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* SidebarView.swift */; };
 		AA000012 /* LiveStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* LiveStatusBar.swift */; };
+		AA000036 /* ErrorMessageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000036 /* ErrorMessageView.swift */; };
 		AA000013 /* ConnectionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000014 /* ConnectionStore.swift */; };
 		AA000016 /* LanguageConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000016 /* LanguageConfig.swift */; };
 		AA000017 /* FileContentService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000017 /* FileContentService.swift */; };
@@ -34,6 +35,7 @@
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
 		AA000031 /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000031 /* DeepLink.swift */; };
 		AA000032 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000032 /* DeepLinkTests.swift */; };
+		AA000035 /* SSHServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000035 /* SSHServiceTests.swift */; };
 		AA000033 /* FileGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000033 /* FileGroupTests.swift */; };
 		AA000034 /* ConnectorRibbonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ConnectorRibbonsView.swift */; };
 /* End PBXBuildFile section */
@@ -59,6 +61,7 @@
 		AB000010 /* DiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffView.swift; sourceTree = "<group>"; };
 		AB000011 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		AB000012 /* LiveStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStatusBar.swift; sourceTree = "<group>"; };
+		AB000036 /* ErrorMessageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorMessageView.swift; sourceTree = "<group>"; };
 		AB000013 /* RemoteDiff.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = RemoteDiff.entitlements; sourceTree = "<group>"; };
 		AB000014 /* ConnectionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStore.swift; sourceTree = "<group>"; };
 		AB000016 /* LanguageConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageConfig.swift; sourceTree = "<group>"; };
@@ -77,6 +80,7 @@
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000031 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		AB000032 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		AB000035 /* SSHServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHServiceTests.swift; sourceTree = "<group>"; };
 		AB000033 /* FileGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGroupTests.swift; sourceTree = "<group>"; };
 		AB000034 /* ConnectorRibbonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectorRibbonsView.swift; sourceTree = "<group>"; };
 		AF000001 /* RemoteDiff.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RemoteDiff.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -159,6 +163,7 @@
 				AB000024 /* SyntaxHighlighterTests.swift */,
 				AB000028 /* SyntaxThemeTests.swift */,
 				AB000032 /* DeepLinkTests.swift */,
+				AB000035 /* SSHServiceTests.swift */,
 				AB000033 /* FileGroupTests.swift */,
 			);
 			path = RemoteDiffTests;
@@ -182,6 +187,7 @@
 				AB000034 /* ConnectorRibbonsView.swift */,
 				AB000011 /* SidebarView.swift */,
 				AB000012 /* LiveStatusBar.swift */,
+				AB000036 /* ErrorMessageView.swift */,
 				AB000027 /* SettingsView.swift */,
 			);
 			path = Views;
@@ -301,6 +307,7 @@
 				AA000034 /* ConnectorRibbonsView.swift in Sources */,
 				AA000011 /* SidebarView.swift in Sources */,
 				AA000012 /* LiveStatusBar.swift in Sources */,
+				AA000036 /* ErrorMessageView.swift in Sources */,
 				AA000023 /* SyntaxHighlighter.swift in Sources */,
 				AA000025 /* SyntaxTheme.swift in Sources */,
 				AA000026 /* ThemeStore.swift in Sources */,
@@ -320,6 +327,7 @@
 				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
 				AA000028 /* SyntaxThemeTests.swift in Sources */,
 				AA000032 /* DeepLinkTests.swift in Sources */,
+				AA000035 /* SSHServiceTests.swift in Sources */,
 				AA000033 /* FileGroupTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

@@ -20,6 +20,7 @@ struct SidebarView: View {
     @State private var editConnectionName: String = ""
     @State private var editRepoName: String = ""
     @State private var isConnectionExpanded: Bool = false
+    @State private var allowPasswordAuth: Bool = false
     @State private var browserSize: BrowserSize = .medium
     @State private var remoteBranch: String = ""
 
@@ -163,6 +164,18 @@ struct SidebarView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
 
+                    Toggle("Allow password authentication for this host", isOn: $allowPasswordAuth)
+                        .font(.caption)
+                        .disabled(selectedHost.isEmpty)
+                        .help("Off by default: RemoteDiff only uses SSH keys and agents, so a malicious host cannot show a password prompt. Turn on only for a trusted host that needs a password or 2FA/OTP. If an ssh ControlMaster for this host is already running, the change applies after it exits. This setting is saved immediately.")
+                        .onAppear { allowPasswordAuth = SSHService.passwordAuthHosts.contains(selectedHost) }
+                        .onChange(of: selectedHost) { allowPasswordAuth = SSHService.passwordAuthHosts.contains($0) }
+                        .onChange(of: allowPasswordAuth) {
+                            if $0 != SSHService.passwordAuthHosts.contains(selectedHost) {
+                                SSHService.setPasswordAuth(allowed: $0, forHost: selectedHost)
+                            }
+                        }
+
                     Divider()
 
                     Text("Repository")
@@ -252,10 +265,8 @@ struct SidebarView: View {
             }
 
             if let error = sshService.lastError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .lineLimit(3)
+                ErrorMessageView(message: error)
+                    .padding(.top, 4)
             }
         }
         .padding()
@@ -419,7 +430,7 @@ struct SidebarView: View {
             remoteBranch = ""
             return
         }
-        let script = "cd \(repoPath) && git rev-parse --abbrev-ref HEAD"
+        let script = SSHService.buildBranchScript(repoPath: repoPath)
         SSHService.runSSHBash(host: selectedHost, script: script) { [self] result in
             DispatchQueue.main.async {
                 switch result {

@@ -2,18 +2,60 @@
 # SSH_ASKPASS helper for RemoteDiff
 # Shows a native macOS dialog to collect SSH passwords/passphrases.
 # SSH passes the prompt (e.g. "Password:" or "Enter passphrase for key...") as $1.
+# The prompt is handed to osascript as an argument (not interpolated into the
+# script source) so a server-controlled prompt can't inject AppleScript.
+# SSH_ASKPASS_PROMPT selects the dialog: "confirm" = yes/no question,
+# "none" = notification only (e.g. FIDO touch), otherwise a hidden-answer text field.
+# "tell me to activate" brings the dialog to the front so it takes keyboard focus
+# even when launched by a background process (the app), without needing Apple
+# Events permission for another app.
 
 PROMPT="${1:-SSH Password:}"
 
-# Use osascript to show a native macOS secure input dialog
-RESULT=$(osascript -e "
-    display dialog \"$PROMPT\" default answer \"\" with hidden answer with title \"RemoteDiff — SSH Authentication\" buttons {\"Cancel\", \"OK\"} default button \"OK\" with icon caution
-    text returned of result
-" 2>/dev/null)
+# Never answer host-key questions ("Are you sure you want to continue connecting",
+# "Accept updated hostkeys?"). RemoteDiff passes StrictHostKeyChecking=yes, but a
+# ProxyJump/ProxyCommand hop runs its own ssh without our options and could still ask.
+# Exiting non-zero makes ssh treat it as "no".
+case "$PROMPT" in
+    *"continue connecting"*|*"Accept updated hostkeys"*) exit 1 ;;
+esac
+
+case "${SSH_ASKPASS_PROMPT:-}" in
+    confirm)
+        RESULT=$(/usr/bin/osascript - "$PROMPT" 2>/dev/null <<'EOF'
+on run argv
+    tell me to activate
+    display dialog (item 1 of argv) with title "RemoteDiff — SSH Authentication" buttons {"No", "Yes"} cancel button "No" with icon caution
+    return "yes"
+end run
+EOF
+)
+        ;;
+    none)
+        # exec: no code runs after the dialog, so ssh's SIGTERM on completion closes it
+        exec /usr/bin/osascript - "$PROMPT" >/dev/null 2>&1 <<'EOF'
+on run argv
+    tell me to activate
+    display dialog (item 1 of argv) with title "RemoteDiff — SSH Authentication" buttons {"OK"} default button "OK" with icon note
+    return ""
+end run
+EOF
+        ;;
+    *)
+        RESULT=$(/usr/bin/osascript - "$PROMPT" 2>/dev/null <<'EOF'
+on run argv
+    tell me to activate
+    display dialog (item 1 of argv) default answer "" with hidden answer with title "RemoteDiff — SSH Authentication" buttons {"Cancel", "OK"} default button "OK" with icon caution
+    return text returned of result
+end run
+EOF
+)
+        ;;
+esac
 
 if [ $? -ne 0 ]; then
-    # User cancelled
+    # Cancelled, or osascript failed (e.g. invalid UTF-8 prompt) — fail closed
     exit 1
 fi
 
-echo "$RESULT"
+printf '%s\n' "$RESULT"

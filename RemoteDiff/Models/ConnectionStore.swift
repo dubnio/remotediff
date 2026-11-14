@@ -84,6 +84,8 @@ class ConnectionStore: ObservableObject {
     }
 
     func deleteConnection(_ connection: SavedConnection) {
+        // A password-auth grant must not outlive its connection
+        SSHService.setPasswordAuth(allowed: false, forHost: connection.host)
         connections.removeAll { $0.id == connection.id }
         save()
     }
