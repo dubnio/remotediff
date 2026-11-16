@@ -46,7 +46,8 @@ class FileContentService: ObservableObject {
         let script = SSHService.buildFileContentScript(repoPath: repoPath, gitRef: gitRef,
                                                        newPath: newPath, oldPath: oldPath)
 
-        SSHService.runSSHBash(host: host, script: script) { [weak self] result in
+        SSHService.runSSHBash(host: host, script: script,
+                              shouldRun: { [weak self] in self?.lastFileID == fileID }) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self, self.lastFileID == fileID else { return }
                 self.isLoading = false
@@ -60,6 +61,8 @@ class FileContentService: ObservableObject {
                         self.newContent = output
                         self.oldContent = ""
                     }
+                case .failure(SSHError.cancelled):
+                    break
                 case .failure(let error):
                     self.loadError = error.localizedDescription
                 }
