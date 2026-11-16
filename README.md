@@ -27,7 +27,7 @@ A native macOS app for viewing git diffs from remote servers over SSH, with side
 
 ```bash
 swift build                # debug build
-swift test                 # 165 tests across 7 suites
+swift test                 # 170 tests across 7 suites
 open RemoteDiff.xcodeproj  # or use Xcode
 ```
 
@@ -76,7 +76,7 @@ Open remote repos directly from the terminal — similar to `code` for VS Code:
 # Basic usage
 remotediff mac-studio:Development/myapp/api
 
-# With SSH user (prompts for password if needed)
+# With SSH user
 remotediff ernesto@mac-studio:Development/myapp/api
 
 # With options
@@ -86,7 +86,7 @@ remotediff prod-server:apps/backend --ref HEAD~3 --staged --untracked
 
 The CLI converts `[user@]host:path` into a `remotediff://` URL and opens it. The app finds or creates a matching connection + repository, then fetches the diff. If RemoteDiff is already running, it switches to the requested repo; otherwise it launches.
 
-**Password support**: when SSH needs a password or key passphrase, a native macOS dialog appears via the bundled `remotediff-askpass` helper — no terminal interaction required, both from the CLI and from the GUI.
+**Password support**: password and keyboard-interactive (incl. 2FA/OTP) authentication is off by default (RemoteDiff uses SSH keys and agents only). Enable it per host with the "Allow password authentication for this host" toggle in the connection editor. Key passphrase prompts always appear as a native macOS dialog via the bundled `remotediff-askpass` helper — no terminal interaction required, both from the CLI and from the GUI.
 
 After building with `build-app.sh`, the CLI is also bundled inside the app at `RemoteDiff.app/Contents/Resources/remotediff`.
 
@@ -150,6 +150,6 @@ scripts/
 ## Requirements
 
 - macOS 13 Ventura or later
-- SSH access to remote hosts (key-based auth recommended; password auth supported via native dialog)
+- SSH access to remote hosts (key-based auth by default; password auth is an opt-in per host in the connection editor)
 - Git installed on the remote server
 - For maintainers building signed releases: Xcode + paid Apple Developer Program membership

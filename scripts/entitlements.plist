@@ -12,12 +12,9 @@
     <false/>
 
     <!--
-        The app launches /usr/bin/ssh as a child process. The Hardened Runtime
-        allows this by default (we don't need allow-jit / allow-unsigned-memory),
-        but SSH may load helper binaries (askpass) and dynamic libraries that
-        aren't signed by Apple, so we permit unsigned dyld loads.
+        disable-library-validation is deliberately NOT set. ssh and the askpass helper
+        run as separate child processes, and library validation only governs code loaded
+        into RemoteDiff's own process (which links only system frameworks).
     -->
-    <key>com.apple.security.cs.disable-library-validation</key>
-    <true/>
 </dict>
 </plist>
