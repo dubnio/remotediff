@@ -20,6 +20,7 @@ struct SidebarView: View {
     @State private var editConnectionName: String = ""
     @State private var editRepoName: String = ""
     @State private var isConnectionExpanded: Bool = false
+    @State private var allowPasswordAuth: Bool = false
     @State private var browserSize: BrowserSize = .medium
     @State private var remoteBranch: String = ""
 
@@ -163,6 +164,18 @@ struct SidebarView: View {
                         .textFieldStyle(.roundedBorder)
                         .font(.system(.body, design: .monospaced))
 
+                    Toggle("Allow password authentication for this host", isOn: $allowPasswordAuth)
+                        .font(.caption)
+                        .disabled(selectedHost.isEmpty)
+                        .help("Off by default: RemoteDiff only uses SSH keys and agents, so a malicious host cannot show a password prompt. Turn on only for a trusted host that needs a password or 2FA/OTP. If an ssh ControlMaster for this host is already running, the change applies after it exits. This setting is saved immediately.")
+                        .onAppear { allowPasswordAuth = SSHService.passwordAuthHosts.contains(selectedHost) }
+                        .onChange(of: selectedHost) { allowPasswordAuth = SSHService.passwordAuthHosts.contains($0) }
+                        .onChange(of: allowPasswordAuth) {
+                            if $0 != SSHService.passwordAuthHosts.contains(selectedHost) {
+                                SSHService.setPasswordAuth(allowed: $0, forHost: selectedHost)
+                            }
+                        }
+
                     Divider()
 
                     Text("Repository")
@@ -252,10 +265,8 @@ struct SidebarView: View {
             }
 
             if let error = sshService.lastError {
-                Text(error)
-                    .font(.caption)
-                    .foregroundColor(.red)
-                    .lineLimit(3)
+                ErrorMessageView(message: error)
+                    .padding(.top, 4)
             }
         }
         .padding()
@@ -326,9 +337,6 @@ struct SidebarView: View {
         editRepoName = repo.name
         remoteBranch = ""
 
-        // Fetch current branch from remote
-        fetchRemoteBranch()
-
         // Restore cached results, or auto-fetch if no cache and connection is ready
         let cachedFileID = sshService.restoreFromCache(repoID: repo.id)
         selectedFileID = cachedFileID
@@ -343,10 +351,13 @@ struct SidebarView: View {
             }
         }
 
-        // Auto-fetch when there's no cached data and the repo is configured
+        // Auto-fetch when there's no cached data and the repo is configured.
+        // fetchDiff() also runs the branch lookup (a separate ssh call), so only run it here when not auto-fetching.
         if cachedFileID == nil && sshService.fileDiffs.isEmpty
             && !connection.host.isEmpty && !repo.repoPath.isEmpty {
             fetchDiff()
+        } else {
+            fetchRemoteBranch()
         }
     }
 
@@ -356,6 +367,7 @@ struct SidebarView: View {
             selectedHost = ""
             repoPath = ""
             gitRef = "HEAD"
+            sshService.cancelPendingFetch()
             sshService.fileDiffs = []
             selectedFileID = nil
         }
@@ -368,6 +380,7 @@ struct SidebarView: View {
     private func deleteRepo(_ repo: SavedRepository, from connection: SavedConnection) {
         if selection?.repositoryID == repo.id {
             selection = nil
+            sshService.cancelPendingFetch()
             sshService.fileDiffs = []
             selectedFileID = nil
         }
@@ -419,9 +432,12 @@ struct SidebarView: View {
             remoteBranch = ""
             return
         }
-        let script = "cd \(repoPath) && git rev-parse --abbrev-ref HEAD"
-        SSHService.runSSHBash(host: selectedHost, script: script) { [self] result in
+        let script = SSHService.buildBranchScript(repoPath: repoPath)
+        let repoID = selection?.repositoryID
+        SSHService.runSSHBash(host: selectedHost, script: script,
+                              shouldRun: { [self] in selection?.repositoryID == repoID }) { [self] result in
             DispatchQueue.main.async {
+                guard selection?.repositoryID == repoID else { return }
                 switch result {
                 case .success(let output):
                     remoteBranch = output.trimmingCharacters(in: .whitespacesAndNewlines)

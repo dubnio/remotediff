@@ -11,7 +11,9 @@ struct LiveStatusBar: View {
             statusText
             Spacer()
 
-            if case .error = watcher.status {
+            if case .error(let msg) = watcher.status {
+                CopyButton(text: msg)
+
                 Button("Reconnect") {
                     watcher.reconnect()
                 }
@@ -59,6 +61,8 @@ struct LiveStatusBar: View {
             case .error(let msg):
                 Text(msg)
                     .lineLimit(1)
+                    .help(msg)
+                    .foregroundColor(.primary)
             }
         }
         .font(.caption)
