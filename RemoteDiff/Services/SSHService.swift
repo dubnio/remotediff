@@ -90,7 +90,7 @@ class SSHService: ObservableObject {
                 case .success(let output):
                     self.fileDiffs = DiffParser.parse(output)
                     if self.fileDiffs.isEmpty && !output.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        self.lastError = String(output.prefix(500))
+                        self.lastError = "Unexpected output from the host\n\n" + String(output.prefix(500))
                     }
                 case .failure(let error):
                     self.lastError = error.localizedDescription
@@ -242,7 +242,7 @@ class SSHService: ObservableObject {
     static func hostKeyFailureHint(stderr: String, exitCode: Int32, host: String) -> String? {
         guard exitCode == 255, stderr.contains("Host key verification failed.") else { return nil }
         if stderr.contains("REMOTE HOST IDENTIFICATION HAS CHANGED") {
-            return "The host key for this host does not match the one saved in known_hosts. The server may have been reinstalled, or someone may be intercepting the connection. Check with the server's owner before removing the old key; the ssh message above names the file and line."
+            return "The host key for this host does not match the one saved in known_hosts. The server may have been reinstalled, or someone may be intercepting the connection. Check with the server's owner before removing the old key; the ssh output below names the file and line."
         }
         if stderr.contains("REVOKED HOST KEY") {
             return "This host's key is marked as revoked in known_hosts, so RemoteDiff will not connect. Check with the server's owner."
@@ -294,16 +294,20 @@ class SSHService: ObservableObject {
     /// Serial queue for every `runSSHBash` call.
     private static let sshQueue = DispatchQueue(label: "remotediff.ssh", qos: .userInitiated)
 
-    /// Builds the user-facing message for a failed ssh run: its stderr (or the exit code) plus hints.
+    /// Builds the user-facing message for a failed ssh run. Line 1 is a one-line summary (shown inline
+    /// by the views), then the hints (before stderr, so a long server banner can't bury them), then
+    /// ssh's stderr (or the exit code), each separated by a blank line.
     static func failureMessage(stderr: String, exitCode: Int32, host: String, allowedHosts: Set<String>) -> String {
-        var msg = stderr.isEmpty ? "SSH exited with code \(exitCode)" : stderr
-        if let hint = authFailureHint(stderr: stderr, exitCode: exitCode, host: host, allowedHosts: allowedHosts) {
-            msg += "\n" + hint
+        let authHint = authFailureHint(stderr: stderr, exitCode: exitCode, host: host, allowedHosts: allowedHosts)
+        let hostKeyHint = hostKeyFailureHint(stderr: stderr, exitCode: exitCode, host: host)
+        var summary = ErrorSummary.summarize(stderr: stderr, exitCode: exitCode)
+        if authHint != nil {
+            summary = "Authentication failed: password login is off for this host"
+        } else if hostKeyHint != nil {
+            summary += ": see Details"
         }
-        if let hint = hostKeyFailureHint(stderr: stderr, exitCode: exitCode, host: host) {
-            msg += "\n" + hint
-        }
-        return msg
+        let body = stderr.isEmpty ? "SSH exited with code \(exitCode)" : stderr
+        return ([summary] + [authHint, hostKeyHint].compactMap { $0 } + [body]).joined(separator: "\n\n")
     }
 
     /// Runs a bash script on a remote host by piping via stdin.

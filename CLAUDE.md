@@ -68,7 +68,7 @@ The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxe
 - **Synced scrolling**: Dual-pane views (Diff, Side by Side) share a single `ScrollView` so both panes scroll together. `dualPaneScroll()` in `DiffView` encapsulates this pattern.
 - **Change navigation**: `ScrollViewReader` + `scrollTo()` drives ⌘↑/⌘↓ jump-to-change. Anchors are hunk IDs in diff mode, grouped changed line IDs in file modes. `changeAnchors(for:)` computes targets per view mode.
 - **Deep linking**: `RemoteDiffApp` owns `pendingDeepLink` state, passes as `@Binding` to `ContentView`. On `.onOpenURL`, the URL is parsed via `DeepLink.parse(from:)`. `ContentView.handleDeepLink()` finds or creates a matching connection+repo, selects it, and auto-fetches.
-- **Error display**: errors are shown with `ErrorMessageView` (full text, selectable, Copy button, scrolls inside the box above 200 pt) — never a bare red `Text` with `lineLimit`. The one-line `LiveStatusBar` is the exception: it keeps `lineLimit(1)` but adds a tooltip with the full message and a `CopyButton`.
+- **Error display**: `SSHService.failureMessage` puts a one-line summary (`ErrorSummary`) on line 1, then hints, then stderr. `ErrorMessageView` shows that line with Copy and, if there is more, "Details…" (`ErrorDetailsSheet`, text captured when opened). `LiveStatusBar` does the same in one line. Never a bare red `Text` with `lineLimit`.
 - **`DisplayLineBuilder`** is pure logic with no UI dependencies — fully unit tested.
 - Script building centralized in `SSHService.buildDiffScript()` / `buildPollScript()` / `buildBranchScript()` / `buildFileContentScript()`.
 - SSH rules (quoting, option order, the app-owned ControlMaster, prompts): see **SSH** below.
@@ -116,8 +116,9 @@ Test suites in `RemoteDiffTests/`:
 - `DeepLinkTests` — URL scheme parsing, user@host format, edge cases, invalid inputs, host/ref/path injection validation
 - `SSHServiceTests` — `stashBeforeSwitching`, `shellQuote`, `shellQuotePath`, and `buildDiffScript` / `buildPollScript` / `buildBranchScript` / `buildFileContentScript` output
 - `FileGroupTests` — sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
+- `ErrorSummaryTests` — error summaries (ssh rules only on exit 255, git rules otherwise, spoofing by banners and remote stderr) and the summary / details split
 
-Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, the `SSHService` script builders / shell quoting, or the `FileGroup` model in `SidebarView.swift`.
+Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, the `SSHService` script builders / shell quoting / `failureMessage`, `ErrorSummary`, or the `FileGroup` model in `SidebarView.swift`.
 
 ## SSH
 

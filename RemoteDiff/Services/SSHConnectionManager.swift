@@ -238,7 +238,7 @@ final class SSHConnectionManager {
                 process.terminate()
                 close(entry)
                 var message = "Timed out waiting for SSH authentication"
-                if !stderr.isEmpty { message += "\n" + stderr }
+                if !stderr.isEmpty { message += "\n\n" + stderr }
                 return fail(host: host, entry: entry, error: SSHError.commandFailed(code: 255, message: message))
             }
             Thread.sleep(forTimeInterval: delay)

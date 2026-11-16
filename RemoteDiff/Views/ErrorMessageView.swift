@@ -3,12 +3,13 @@ import AppKit
 
 // MARK: - Error Message View
 
-/// Readable, selectable, copyable error box. Use instead of a bare red `Text` with `lineLimit`.
-/// Hugs short messages; above 200 pt the text scrolls inside the box.
+/// One-line error summary with a Copy button and, when there is more to read, a "Details…" button
+/// that opens the full text in a sheet. Use instead of a bare red `Text` with `lineLimit`.
+/// The summary is the message's first line (`SSHService.failureMessage` puts one there).
 struct ErrorMessageView: View {
     let message: String
 
-    static let maxHeight: CGFloat = 200
+    @State private var details: ErrorDetails?
 
     /// ssh stderr ends with "\r\n"; normalise line endings and drop trailing
     /// blank lines so they don't render as empty rows or land on the clipboard.
@@ -18,29 +19,38 @@ struct ErrorMessageView: View {
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private var messageText: some View {
-        Text(Self.displayText(message))
-            .font(.caption)
-            .foregroundColor(.primary)
-            .fixedSize(horizontal: false, vertical: true)
-            .textSelection(.enabled)
-            .frame(maxWidth: .infinity, alignment: .leading)
+    /// The first line of the message: the one-line summary.
+    static func summary(_ message: String) -> String {
+        let text = displayText(message)
+        let first = text.split(separator: "\n", maxSplits: 1, omittingEmptySubsequences: false).first.map(String.init) ?? ""
+        return first.isEmpty ? "Error" : first
+    }
+
+    /// Everything after the summary line, or nil when the summary is the whole message.
+    static func detailText(_ message: String) -> String? {
+        let text = displayText(message)
+        guard let newline = text.firstIndex(of: "\n") else { return nil }
+        let rest = text[text.index(after: newline)...].trimmingCharacters(in: .whitespacesAndNewlines)
+        return rest.isEmpty ? nil : rest
     }
 
     var body: some View {
-        HStack(alignment: .top, spacing: 6) {
+        HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: "exclamationmark.triangle.fill")
                 .foregroundColor(.red)
                 .font(.caption)
                 .accessibilityLabel("Error")
 
-            CappedHeight(maxHeight: Self.maxHeight) {
-                ViewThatFits(in: .vertical) {
-                    messageText
-                    ScrollView(.vertical) { messageText }
-                }
-            }
+            Text(Self.summary(message))
+                .font(.caption)
+                .foregroundColor(.primary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
+            if Self.detailText(message) != nil {
+                DetailsButton { details = ErrorDetails(message: message) }
+            }
             CopyButton(text: Self.displayText(message))
         }
         .padding(8)
@@ -52,23 +62,74 @@ struct ErrorMessageView: View {
             RoundedRectangle(cornerRadius: 6)
                 .stroke(Color.red.opacity(0.35), lineWidth: 1)
         )
+        .sheet(item: $details) { ErrorDetailsSheet(message: $0.message) }
     }
 }
 
-// MARK: - Capped Height
+// MARK: - Error Details
 
-/// Always offers its child `maxHeight` (whatever the parent offers) and reports
-/// the child's own size. A plain `.frame(maxHeight:)` would instead grow to fill
-/// the parent's offer, so short messages would get a 200 pt box.
-private struct CappedHeight: Layout {
-    let maxHeight: CGFloat
+/// The message a details sheet shows, captured when the user opens it, so a later fetch that
+/// changes or clears the error doesn't change or close the sheet under the reader.
+struct ErrorDetails: Identifiable {
+    let id = UUID()
+    let message: String
+}
 
-    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        subviews.first?.sizeThatFits(ProposedViewSize(width: proposal.width, height: maxHeight)) ?? .zero
+/// Borderless "Details…" button used next to an error summary.
+struct DetailsButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button("Details…", action: action)
+            .buttonStyle(.borderless)
+            .font(.caption)
+            .accessibilityHint("Shows the full error message")
     }
+}
 
-    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        subviews.first?.place(at: bounds.origin, proposal: ProposedViewSize(bounds.size))
+/// Modal with the full, selectable error text and a Copy button. Return and Escape close it.
+struct ErrorDetailsSheet: View {
+    let message: String
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var copied = false
+    @State private var generation = 0
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(ErrorMessageView.summary(message))
+                .font(.headline)
+                .textSelection(.enabled)
+
+            // Vertical only, so long hint paragraphs wrap instead of needing a horizontal scroll.
+            ScrollView(.vertical) {
+                Text(ErrorMessageView.detailText(message) ?? ErrorMessageView.displayText(message))
+                    .font(.system(.caption, design: .monospaced))
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(8)
+            }
+            .background(Color.secondary.opacity(0.08))
+            .cornerRadius(6)
+
+            HStack {
+                Button(copied ? "Copied" : "Copy") {
+                    CopyButton.copyToPasteboard(ErrorMessageView.displayText(message))
+                    copied = true
+                    generation += 1
+                    let current = generation
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        if generation == current { copied = false }
+                    }
+                }
+                Spacer()
+                Button("Close") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(16)
+        .frame(width: 640, height: 420)
+        .onExitCommand { dismiss() }
     }
 }
 

@@ -36,6 +36,8 @@
 		AA000030 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = AB000030 /* Assets.xcassets */; };
 		AA000031 /* DeepLink.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000031 /* DeepLink.swift */; };
 		AA000032 /* DeepLinkTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000032 /* DeepLinkTests.swift */; };
+		AA000037 /* ErrorSummary.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000037 /* ErrorSummary.swift */; };
+		AA000038 /* ErrorSummaryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000038 /* ErrorSummaryTests.swift */; };
 		AA000035 /* SSHServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000035 /* SSHServiceTests.swift */; };
 		AA000033 /* FileGroupTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000033 /* FileGroupTests.swift */; };
 		AA000034 /* ConnectorRibbonsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000034 /* ConnectorRibbonsView.swift */; };
@@ -82,6 +84,8 @@
 		AB000030 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		AB000031 /* DeepLink.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLink.swift; sourceTree = "<group>"; };
 		AB000032 /* DeepLinkTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeepLinkTests.swift; sourceTree = "<group>"; };
+		AB000037 /* ErrorSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSummary.swift; sourceTree = "<group>"; };
+		AB000038 /* ErrorSummaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ErrorSummaryTests.swift; sourceTree = "<group>"; };
 		AB000035 /* SSHServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHServiceTests.swift; sourceTree = "<group>"; };
 		AB000033 /* FileGroupTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FileGroupTests.swift; sourceTree = "<group>"; };
 		AB000034 /* ConnectorRibbonsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectorRibbonsView.swift; sourceTree = "<group>"; };
@@ -142,6 +146,7 @@
 				AB000026 /* ThemeStore.swift */,
 				AB000014 /* ConnectionStore.swift */,
 				AB000031 /* DeepLink.swift */,
+				AB000037 /* ErrorSummary.swift */,
 			);
 			path = Models;
 			sourceTree = "<group>";
@@ -166,6 +171,7 @@
 				AB000024 /* SyntaxHighlighterTests.swift */,
 				AB000028 /* SyntaxThemeTests.swift */,
 				AB000032 /* DeepLinkTests.swift */,
+				AB000038 /* ErrorSummaryTests.swift */,
 				AB000035 /* SSHServiceTests.swift */,
 				AB000033 /* FileGroupTests.swift */,
 			);
@@ -318,6 +324,7 @@
 				AA000027 /* SettingsView.swift in Sources */,
 				AA000013 /* ConnectionStore.swift in Sources */,
 				AA000031 /* DeepLink.swift in Sources */,
+				AA000037 /* ErrorSummary.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -331,6 +338,7 @@
 				AA000024 /* SyntaxHighlighterTests.swift in Sources */,
 				AA000028 /* SyntaxThemeTests.swift in Sources */,
 				AA000032 /* DeepLinkTests.swift in Sources */,
+				AA000038 /* ErrorSummaryTests.swift in Sources */,
 				AA000035 /* SSHServiceTests.swift in Sources */,
 				AA000033 /* FileGroupTests.swift in Sources */,
 			);

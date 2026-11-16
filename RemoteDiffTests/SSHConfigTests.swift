@@ -235,12 +235,30 @@ final class SSHConfigTests: XCTestCase {
         XCTAssertTrue(args.contains("BatchMode=yes"))
     }
 
-    func testFailureMessageAddsHostKeyHintToMasterStderr() {
+    func testFailureMessageIsSummaryThenHintsThenStderr() {
         let msg = SSHService.failureMessage(stderr: unknownKey, exitCode: 255, host: "pwtest", allowedHosts: [])
-        XCTAssertTrue(msg.hasPrefix(unknownKey))
-        XCTAssertTrue(msg.contains("ssh -o StrictHostKeyChecking=ask pwtest"))
+        XCTAssertTrue(msg.hasPrefix("Host key not known: see Details\n\n"))
+        XCTAssertTrue(msg.hasSuffix("\n\n" + unknownKey))
+        XCTAssertLessThan(msg.range(of: "StrictHostKeyChecking=ask pwtest")!.lowerBound, msg.range(of: unknownKey)!.lowerBound)
+    }
+
+    func testFailureMessageNamesPasswordSettingInSummary() {
+        let msg = SSHService.failureMessage(stderr: "test@h: Permission denied (publickey,password).", exitCode: 255, host: "h", allowedHosts: [])
+        XCTAssertTrue(msg.hasPrefix("Authentication failed: password login is off for this host\n\n"))
+        XCTAssertTrue(msg.contains("Allow password authentication for this host"))
+    }
+
+    func testFailureMessageWithoutHints() {
+        XCTAssertEqual(SSHService.failureMessage(stderr: "boom\n", exitCode: 1, host: "h", allowedHosts: []),
+                       "Command failed on the host\n\nboom\n")
         XCTAssertEqual(SSHService.failureMessage(stderr: "", exitCode: 3, host: "h", allowedHosts: []),
-                       "SSH exited with code 3")
+                       "Command failed on the host\n\nSSH exited with code 3")
+    }
+
+    func testChangedKeyHintPointsBelow() {
+        let hint = SSHService.hostKeyFailureHint(stderr: changedKey, exitCode: 255, host: "pwtest")
+        XCTAssertTrue(hint?.contains("below") ?? false)
+        XCTAssertFalse(hint?.contains("above") ?? true)
     }
 
     func testAuthFailureHintNilForPublickeyOnly() {
