@@ -7,6 +7,12 @@ struct RemoteDiffApp: App {
     @State private var pendingDeepLink: DeepLink?
 
     init() {
+        // Stop masters left behind by a crashed run, and close ours on quit.
+        DispatchQueue.global(qos: .utility).async { SSHConnectionManager.shared.removeLeftovers() }
+        NotificationCenter.default.addObserver(forName: NSApplication.willTerminateNotification,
+                                               object: nil, queue: nil) { _ in
+            SSHConnectionManager.shared.closeAll()
+        }
         // Set app icon from asset catalog
         if let icon = NSImage(named: "AppIcon") {
             NSApplication.shared.applicationIconImage = icon
@@ -20,6 +26,14 @@ struct RemoteDiffApp: App {
                 .onOpenURL { url in
                     if let link = DeepLink.parse(from: url) {
                         pendingDeepLink = link
+                    } else {
+                        let alert = NSAlert()
+                        alert.alertStyle = .warning
+                        alert.messageText = "Ignored invalid remotediff:// link"
+                        alert.informativeText = "This remotediff:// link is malformed or contains characters RemoteDiff does not accept."
+                        alert.addButton(withTitle: "OK")
+                        NSApplication.shared.activate(ignoringOtherApps: true)
+                        alert.runModal()
                     }
                 }
         }

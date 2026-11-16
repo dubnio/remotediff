@@ -4,6 +4,7 @@ import SwiftUI
 
 struct LiveStatusBar: View {
     @ObservedObject var watcher: ControlMasterWatcher
+    @State private var details: ErrorDetails?
 
     var body: some View {
         HStack(spacing: 8) {
@@ -11,7 +12,12 @@ struct LiveStatusBar: View {
             statusText
             Spacer()
 
-            if case .error = watcher.status {
+            if case .error(let msg) = watcher.status {
+                if ErrorMessageView.detailText(msg) != nil {
+                    DetailsButton { details = ErrorDetails(message: msg) }
+                }
+                CopyButton(text: ErrorMessageView.displayText(msg))
+
                 Button("Reconnect") {
                     watcher.reconnect()
                 }
@@ -22,6 +28,7 @@ struct LiveStatusBar: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(statusBackground)
+        .sheet(item: $details) { ErrorDetailsSheet(message: $0.message) }
     }
 
     @ViewBuilder
@@ -57,8 +64,10 @@ struct LiveStatusBar: View {
             case .watching:
                 Text("Watching \(watcher.host)")
             case .error(let msg):
-                Text(msg)
+                Text(ErrorMessageView.summary(msg))
                     .lineLimit(1)
+                    .help(msg)
+                    .foregroundColor(.primary)
             }
         }
         .font(.caption)

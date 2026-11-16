@@ -120,8 +120,10 @@ struct DiffView: View {
             VStack(spacing: 8) {
                 Spacer()
                 Text("Failed to load file").foregroundColor(.secondary)
-                Text(error).font(.caption).foregroundColor(.red)
+                ErrorMessageView(message: error).frame(maxWidth: 520)
                 Button("Retry") {
+                    // fetchFor skips a file that already has an error (so re-renders don't loop); clear that first.
+                    fileContentService.invalidate()
                     fileContentService.fetchFor(fileDiff: fileDiff, host: host, repoPath: repoPath, gitRef: gitRef)
                 }
                 .buttonStyle(.bordered)

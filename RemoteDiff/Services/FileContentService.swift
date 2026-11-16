@@ -41,17 +41,13 @@ class FileContentService: ObservableObject {
 
         let newPath = fileDiff.isDeletedFile ? fileDiff.oldPath : fileDiff.newPath
         let oldPath = fileDiff.isNewFile ? nil : fileDiff.oldPath
-        let ref = gitRef.isEmpty ? "HEAD" : gitRef
         let fileID = fileDiff.id
 
-        var script = "cat '\(newPath)'"
-        if let oldPath = oldPath {
-            script += "\necho '<<<REMOTEDIFF_SEPARATOR>>>'"
-            script += "\ngit show \(ref):'\(oldPath)' 2>/dev/null || echo ''"
-        }
-        script = "cd \(repoPath) && " + script
+        let script = SSHService.buildFileContentScript(repoPath: repoPath, gitRef: gitRef,
+                                                       newPath: newPath, oldPath: oldPath)
 
-        SSHService.runSSHBash(host: host, script: script) { [weak self] result in
+        SSHService.runSSHBash(host: host, script: script,
+                              shouldRun: { [weak self] in self?.lastFileID == fileID }) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self, self.lastFileID == fileID else { return }
                 self.isLoading = false
@@ -65,6 +61,8 @@ class FileContentService: ObservableObject {
                         self.newContent = output
                         self.oldContent = ""
                     }
+                case .failure(SSHError.cancelled):
+                    break
                 case .failure(let error):
                     self.loadError = error.localizedDescription
                 }
