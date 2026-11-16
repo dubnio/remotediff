@@ -14,6 +14,7 @@
 		AA000005 /* DiffParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000005 /* DiffParser.swift */; };
 		AA000006 /* SSHService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000006 /* SSHService.swift */; };
 		AA000007 /* ControlMasterWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000007 /* ControlMasterWatcher.swift */; };
+		AA0000F1 /* SSHConnectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB0000F1 /* SSHConnectionManager.swift */; };
 		AA000010 /* DiffView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000010 /* DiffView.swift */; };
 		AA000011 /* SidebarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000011 /* SidebarView.swift */; };
 		AA000012 /* LiveStatusBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AB000012 /* LiveStatusBar.swift */; };
@@ -58,6 +59,7 @@
 		AB000005 /* DiffParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffParser.swift; sourceTree = "<group>"; };
 		AB000006 /* SSHService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHService.swift; sourceTree = "<group>"; };
 		AB000007 /* ControlMasterWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ControlMasterWatcher.swift; sourceTree = "<group>"; };
+		AB0000F1 /* SSHConnectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SSHConnectionManager.swift; sourceTree = "<group>"; };
 		AB000010 /* DiffView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiffView.swift; sourceTree = "<group>"; };
 		AB000011 /* SidebarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SidebarView.swift; sourceTree = "<group>"; };
 		AB000012 /* LiveStatusBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveStatusBar.swift; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 				AB000006 /* SSHService.swift */,
 				AB000017 /* FileContentService.swift */,
 				AB000007 /* ControlMasterWatcher.swift */,
+				AB0000F1 /* SSHConnectionManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -300,6 +303,7 @@
 				AA000006 /* SSHService.swift in Sources */,
 				AA000017 /* FileContentService.swift in Sources */,
 				AA000007 /* ControlMasterWatcher.swift in Sources */,
+				AA0000F1 /* SSHConnectionManager.swift in Sources */,
 				AA000016 /* LanguageConfig.swift in Sources */,
 				AA000010 /* DiffView.swift in Sources */,
 				AA000018 /* DisplayLineBuilder.swift in Sources */,

@@ -3,7 +3,7 @@ import Combine
 
 // MARK: - ControlMaster Watcher
 
-/// Maintains a persistent SSH ControlMaster connection and polls for changes
+/// Polls for changes through the shared app-owned SSH master (`SSHConnectionManager`)
 /// by periodically running `git diff --stat` on the remote. When the stat output
 /// changes, it publishes on `changeDetected` (debounced 800ms).
 class ControlMasterWatcher: ObservableObject {
@@ -19,7 +19,6 @@ class ControlMasterWatcher: ObservableObject {
     let changeDetected = PassthroughSubject<Void, Never>()
 
     private var pollTimer: Timer?
-    private var masterProcess: Process?
     private var lastStatOutput: String = ""
     /// Bumped on every start/stop so polls from a previous watch are discarded.
     private var generation = 0
@@ -33,10 +32,6 @@ class ControlMasterWatcher: ObservableObject {
     private var gitRef: String = "HEAD"
     private var includeStaged: Bool = false
     private var includeUntracked: Bool = false
-
-    private var socketPath: String {
-        "\(NSTemporaryDirectory())remotediff-ssh-\(host)"
-    }
 
     init() {
         rawChange
@@ -63,102 +58,21 @@ class ControlMasterWatcher: ObservableObject {
         self.lastStatOutput = ""
 
         status = .connecting
-        startMaster()
+        pollForChanges()  // the first poll also opens the shared master (and authenticates)
     }
 
+    /// Stops polling. The shared master stays open: other fetches use it too.
     func stop() {
         generation += 1
         pollTimer?.invalidate()
         pollTimer = nil
-        terminateMaster()
         status = .idle
     }
 
+    /// Restarts the watch. A dead master is reopened by `runSSHBash` itself; a healthy one is kept.
     func reconnect() {
         start(host: host, repoPath: repoPath, gitRef: gitRef,
               includeStaged: includeStaged, includeUntracked: includeUntracked)
-    }
-
-    // MARK: - ControlMaster
-
-    /// ssh argv for the ControlMaster. Host-key and auth options come first (ssh keeps the first value).
-    static func masterArguments(host: String, socketPath: String, allowedHosts: Set<String>) -> [String] {
-        SSHService.hostKeyOptionArgs + SSHService.authOptionArgs(host: host, allowedHosts: allowedHosts) + [
-            "-o", "ControlMaster=yes",
-            "-o", "ControlPath=\(socketPath)",
-            "-o", "ControlPersist=yes",
-            "-o", "ServerAliveInterval=15",
-            "-o", "ServerAliveCountMax=3",
-            "-o", "ConnectTimeout=10",
-            "-N",
-            "--", host
-        ]
-    }
-
-    private func startMaster() {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        process.arguments = Self.masterArguments(host: host, socketPath: socketPath,
-                                                 allowedHosts: SSHService.passwordAuthHosts)
-        process.environment = SSHService.sshEnvironment()
-        process.standardOutput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-
-        // Captured so the delayed check uses this watch's values even if start()/stop() run meanwhile.
-        let gen = generation, host = self.host, socketPath = self.socketPath
-        do {
-            try process.run()
-            masterProcess = process
-            DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.verifyMasterAndStartPolling(generation: gen, host: host, socketPath: socketPath)
-            }
-        } catch {
-            DispatchQueue.main.async { [weak self] in
-                self?.status = .error("Failed to start SSH: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func verifyMasterAndStartPolling(generation gen: Int, host: String, socketPath: String) {
-        let check = Process()
-        check.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", "--", host]
-        check.standardOutput = FileHandle.nullDevice
-        check.standardError = FileHandle.nullDevice
-
-        do {
-            try check.run()
-            check.waitUntilExit()
-
-            DispatchQueue.main.async { [weak self] in
-                guard let self, gen == self.generation else { return }  // watch stopped or restarted
-                if check.terminationStatus == 0 {
-                    self.status = .watching
-                    self.startPolling()
-                } else {
-                    self.status = .error("ControlMaster socket not established")
-                }
-            }
-        } catch {
-            DispatchQueue.main.async { [weak self] in
-                guard let self, gen == self.generation else { return }
-                self.status = .error("Failed to check master: \(error.localizedDescription)")
-            }
-        }
-    }
-
-    private func terminateMaster() {
-        let exit = Process()
-        exit.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-        exit.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "exit", "--", host]
-        exit.standardOutput = FileHandle.nullDevice
-        exit.standardError = FileHandle.nullDevice
-        try? exit.run()
-        exit.waitUntilExit()
-
-        masterProcess?.terminate()
-        masterProcess = nil
-        try? FileManager.default.removeItem(atPath: socketPath)
     }
 
     // MARK: - Polling
@@ -170,16 +84,6 @@ class ControlMasterWatcher: ObservableObject {
         }
     }
 
-    /// Extra ssh args for polls: use the master's socket only. ssh falls back to a normal
-    /// connection when the socket is missing, so every auth method is disabled too — a dead
-    /// master makes the poll fail at once instead of prompting (Touch ID / password) every 2 s.
-    static func pollArguments(socketPath: String) -> [String] {
-        ["-o", "ControlPath=\(socketPath)", "-o", "ControlMaster=no", "-o", "BatchMode=yes",
-         "-o", "IdentityAgent=none", "-o", "PubkeyAuthentication=no",
-         "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no",
-         "-o", "GSSAPIAuthentication=no", "-o", "HostbasedAuthentication=no"]
-    }
-
     private func pollForChanges() {
         guard !pollInFlight else { return }
         pollInFlight = true
@@ -188,8 +92,10 @@ class ControlMasterWatcher: ObservableObject {
             repoPath: repoPath, gitRef: gitRef,
             includeStaged: includeStaged, includeUntracked: includeUntracked
         )
-        SSHService.runSSHBash(host: host, script: script, extraArgs: Self.pollArguments(socketPath: socketPath),
-                              shouldRun: { [weak self] in self?.generation == gen }) { [weak self] result in
+        let mayOpen = status != .watching  // only the first poll may connect; later ones never re-authenticate
+        SSHService.runSSHBash(host: host, script: script,
+                              shouldRun: { [weak self] in self?.generation == gen },
+                              mayOpenConnection: mayOpen) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
                 guard gen == self.generation else { return }
@@ -197,6 +103,10 @@ class ControlMasterWatcher: ObservableObject {
 
                 switch result {
                 case .success(let output):
+                    if self.status != .watching {
+                        self.status = .watching
+                        self.startPolling()
+                    }
                     if output != self.lastStatOutput {
                         let isFirstPoll = self.lastStatOutput.isEmpty
                         self.lastStatOutput = output
@@ -204,8 +114,9 @@ class ControlMasterWatcher: ObservableObject {
                             self.rawChange.send()
                         }
                     }
-                case .failure:
-                    self.status = .error("SSH poll failed — connection may have dropped")
+                case .failure(let error):
+                    if case SSHError.cancelled = error { return }
+                    self.status = .error(error.localizedDescription)
                     self.pollTimer?.invalidate()
                     self.pollTimer = nil
                 }

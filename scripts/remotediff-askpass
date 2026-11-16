@@ -9,8 +9,11 @@
 # "tell me to activate" brings the dialog to the front so it takes keyboard focus
 # even when launched by a background process (the app), without needing Apple
 # Events permission for another app.
+# Every dialog is tied to the ssh that asked: if ssh exits first (e.g. the app killed it),
+# a watchdog kills the dialog, so it never stays on screen over the next prompt.
 
 PROMPT="${1:-SSH Password:}"
+SSH_PID=$PPID
 
 # Never answer host-key questions ("Are you sure you want to continue connecting",
 # "Accept updated hostkeys?"). RemoteDiff passes StrictHostKeyChecking=yes, but a
@@ -20,9 +23,27 @@ case "$PROMPT" in
     *"continue connecting"*|*"Accept updated hostkeys"*) exit 1 ;;
 esac
 
+# Runs osascript (script on stdin) and kills it if ssh exits first, so a dialog never outlives its ssh.
+# The explicit <&0 matters: a non-interactive bash redirects a background job's stdin to /dev/null otherwise.
+# The watchdog's output goes to /dev/null so $(...) doesn't wait for it.
+run_dialog() {
+    local osa= watch=
+    # ssh closes a "none" notification by sending SIGTERM to this script: pass it on to the dialog.
+    # Installed before the children start, and copes with variables that are still empty.
+    trap '[ -n "$osa" ] && kill "$osa" 2>/dev/null; [ -n "$watch" ] && kill "$watch" 2>/dev/null; exit 1' TERM INT HUP
+    /usr/bin/osascript - "$PROMPT" <&0 2>/dev/null &
+    osa=$!
+    ( while kill -0 "$SSH_PID" 2>/dev/null; do sleep 1; done; kill "$osa" 2>/dev/null ) >/dev/null 2>&1 &
+    watch=$!
+    wait "$osa"
+    local status=$?
+    kill "$watch" 2>/dev/null
+    return $status
+}
+
 case "${SSH_ASKPASS_PROMPT:-}" in
     confirm)
-        RESULT=$(/usr/bin/osascript - "$PROMPT" 2>/dev/null <<'EOF'
+        RESULT=$(run_dialog <<'EOF'
 on run argv
     tell me to activate
     display dialog (item 1 of argv) with title "RemoteDiff — SSH Authentication" buttons {"No", "Yes"} cancel button "No" with icon caution
@@ -30,19 +51,20 @@ on run argv
 end run
 EOF
 )
+        STATUS=$?
         ;;
     none)
-        # exec: no code runs after the dialog, so ssh's SIGTERM on completion closes it
-        exec /usr/bin/osascript - "$PROMPT" >/dev/null 2>&1 <<'EOF'
+        run_dialog >/dev/null <<'EOF'
 on run argv
     tell me to activate
     display dialog (item 1 of argv) with title "RemoteDiff — SSH Authentication" buttons {"OK"} default button "OK" with icon note
     return ""
 end run
 EOF
+        exit 0
         ;;
     *)
-        RESULT=$(/usr/bin/osascript - "$PROMPT" 2>/dev/null <<'EOF'
+        RESULT=$(run_dialog <<'EOF'
 on run argv
     tell me to activate
     display dialog (item 1 of argv) default answer "" with hidden answer with title "RemoteDiff — SSH Authentication" buttons {"Cancel", "OK"} default button "OK" with icon caution
@@ -50,10 +72,11 @@ on run argv
 end run
 EOF
 )
+        STATUS=$?
         ;;
 esac
 
-if [ $? -ne 0 ]; then
+if [ $STATUS -ne 0 ]; then
     # Cancelled, or osascript failed (e.g. invalid UTF-8 prompt) — fail closed
     exit 1
 fi

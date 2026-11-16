@@ -186,7 +186,7 @@ struct ContentView: View {
 
         // Save current results before switching
         if let prev = selection {
-            sshService.saveToCache(repoID: prev.repositoryID, selectedFileID: selectedFileID)
+            sshService.stashBeforeSwitching(repoID: prev.repositoryID, selectedFileID: selectedFileID)
         }
 
         // Select and load

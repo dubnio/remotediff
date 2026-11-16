@@ -88,6 +88,7 @@ final class SSHConfigTests: XCTestCase {
             ["-o", "StrictHostKeyChecking=yes",
              "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no",
              "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+             "-o", "ForwardAgent=no", "-o", "ForwardX11=no", "-o", "ClearAllForwardings=yes",
              "-o", "ControlPath=/x", "--", "h", "bash"]
         )
     }
@@ -97,12 +98,13 @@ final class SSHConfigTests: XCTestCase {
             SSHService.sshArguments(host: "h", extraArgs: ["-o", "ControlPath=/x"], allowedHosts: ["h"]),
             ["-o", "StrictHostKeyChecking=yes",
              "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+             "-o", "ForwardAgent=no", "-o", "ForwardX11=no", "-o", "ClearAllForwardings=yes",
              "-o", "ControlPath=/x", "--", "h", "bash"]
         )
     }
 
-    func testPollArgumentsUseExistingSocketOnly() {
-        let args = ControlMasterWatcher.pollArguments(socketPath: "/s")
+    func testClientArgumentsUseExistingSocketOnly() {
+        let args = SSHConnectionManager.clientArguments(socketPath: "/s")
         XCTAssertEqual(Array(args.prefix(2)), ["-o", "ControlPath=/s"])
         for option in ["ControlMaster=no", "BatchMode=yes", "IdentityAgent=none", "PubkeyAuthentication=no",
                        "PasswordAuthentication=no", "KbdInteractiveAuthentication=no",
@@ -174,18 +176,71 @@ final class SSHConfigTests: XCTestCase {
     }
 
     func testMasterArgumentsPutHostKeyAndAuthOptionsFirst() {
-        let args = ControlMasterWatcher.masterArguments(host: "h", socketPath: "/s", allowedHosts: [])
+        let args = SSHConnectionManager.masterArguments(host: "h", socketPath: "/s", allowedHosts: [])
         XCTAssertEqual(Array(args.prefix(6)),
                        ["-o", "StrictHostKeyChecking=yes",
                         "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no"])
         XCTAssertEqual(Array(args.suffix(2)), ["--", "h"])
+        XCTAssertTrue(args.contains("ControlMaster=yes"))
         XCTAssertTrue(args.contains("ControlPath=/s"))
+        XCTAssertTrue(args.contains("ControlPersist=no"))
+        XCTAssertTrue(args.contains("NumberOfPasswordPrompts=1"))
+        XCTAssertTrue(args.contains("ForkAfterAuthentication=no"))
+        XCTAssertTrue(args.contains("RemoteCommand=none"))
+        XCTAssertTrue(args.contains("-N"))
         XCTAssertTrue(args.contains("ConnectTimeout=10"))
+        for option in ["ForwardAgent=no", "ForwardX11=no", "ClearAllForwardings=yes"] {
+            XCTAssertTrue(args.contains(option), option)
+        }
     }
 
     func testMasterArgumentsKeepHostKeyCheckingForAllowedHost() {
-        let args = ControlMasterWatcher.masterArguments(host: "h", socketPath: "/s", allowedHosts: ["h"])
-        XCTAssertEqual(Array(args.prefix(4)), ["-o", "StrictHostKeyChecking=yes", "-o", "ControlMaster=yes"])
+        let args = SSHConnectionManager.masterArguments(host: "h", socketPath: "/s", allowedHosts: ["h"])
+        XCTAssertEqual(Array(args.prefix(2)), ["-o", "StrictHostKeyChecking=yes"])
+        XCTAssertFalse(args.contains("PasswordAuthentication=no"))
+        XCTAssertFalse(args.contains("KbdInteractiveAuthentication=no"))
+    }
+
+    // MARK: - Socket path
+
+    func testSocketPathsAreUniqueAcrossCalls() {
+        let manager = SSHConnectionManager()
+        XCTAssertNotEqual(manager.nextSocketPath(), manager.nextSocketPath())
+    }
+
+    func testSocketPathIsInsidePerPidDirectoryAndShort() {
+        let manager = SSHConnectionManager()
+        let path = manager.nextSocketPath()
+        XCTAssertEqual(URL(fileURLWithPath: path).deletingLastPathComponent().path,
+                       URL(fileURLWithPath: SSHConnectionManager.socketDirectory).path)
+        XCTAssertTrue(SSHConnectionManager.socketDirectory.hasSuffix("/" + String(getpid())))
+        XCTAssertLessThan(path.utf8.count + 17, 104)
+    }
+
+    // MARK: - Failure memo, client args, stash
+
+    func testShouldFailFast() {
+        let now: TimeInterval = 100
+        XCTAssertFalse(SSHConnectionManager.shouldFailFast(requestedAt: now, lastFailureAt: nil))
+        XCTAssertTrue(SSHConnectionManager.shouldFailFast(requestedAt: now, lastFailureAt: now + 1))
+        XCTAssertFalse(SSHConnectionManager.shouldFailFast(requestedAt: now + 1, lastFailureAt: now))
+    }
+
+    func testClientArgumentsDisableProxyAndAuth() {
+        let args = SSHConnectionManager.clientArguments(socketPath: "/s")
+        XCTAssertTrue(args.contains("ProxyCommand=false"))
+        XCTAssertTrue(args.contains("SessionType=default"))
+        XCTAssertTrue(args.contains("ForkAfterAuthentication=no"))
+        XCTAssertTrue(args.contains("ProxyJump=none"))
+        XCTAssertTrue(args.contains("BatchMode=yes"))
+    }
+
+    func testFailureMessageAddsHostKeyHintToMasterStderr() {
+        let msg = SSHService.failureMessage(stderr: unknownKey, exitCode: 255, host: "pwtest", allowedHosts: [])
+        XCTAssertTrue(msg.hasPrefix(unknownKey))
+        XCTAssertTrue(msg.contains("ssh -o StrictHostKeyChecking=ask pwtest"))
+        XCTAssertEqual(SSHService.failureMessage(stderr: "", exitCode: 3, host: "h", allowedHosts: []),
+                       "SSH exited with code 3")
     }
 
     func testAuthFailureHintNilForPublickeyOnly() {

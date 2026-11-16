@@ -167,7 +167,7 @@ struct SidebarView: View {
                     Toggle("Allow password authentication for this host", isOn: $allowPasswordAuth)
                         .font(.caption)
                         .disabled(selectedHost.isEmpty)
-                        .help("Off by default: RemoteDiff only uses SSH keys and agents, so a malicious host cannot show a password prompt. Turn on only for a trusted host that needs a password or 2FA/OTP. If an ssh ControlMaster for this host is already running, the change applies after it exits. This setting is saved immediately.")
+                        .help("Off by default: RemoteDiff only uses SSH keys and agents, so a malicious host cannot show a password prompt. Turn on only for a trusted host that needs a password or 2FA/OTP. Changing it closes RemoteDiff's connection to this host, so the next fetch reconnects with the new setting. This setting is saved immediately.")
                         .onAppear { allowPasswordAuth = SSHService.passwordAuthHosts.contains(selectedHost) }
                         .onChange(of: selectedHost) { allowPasswordAuth = SSHService.passwordAuthHosts.contains($0) }
                         .onChange(of: allowPasswordAuth) {
@@ -324,7 +324,7 @@ struct SidebarView: View {
     private func selectRepo(_ repo: SavedRepository, in connection: SavedConnection) {
         // Save current results before switching
         if let prev = selection {
-            sshService.saveToCache(repoID: prev.repositoryID, selectedFileID: selectedFileID)
+            sshService.stashBeforeSwitching(repoID: prev.repositoryID, selectedFileID: selectedFileID)
         }
 
         selection = RepoSelection(connectionID: connection.id, repositoryID: repo.id)
