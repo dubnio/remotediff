@@ -111,4 +111,22 @@ final class SSHServiceTests: XCTestCase {
         XCTAssertEqual(SSHService.shellQuotePath("~bob/a b"), "~bob/'a b'")
         XCTAssertEqual(SSHService.shellQuotePath("~/x"), "~/'x'")
     }
+
+    func testStashBeforeSwitchingDropsCacheWhileLoading() {
+        let id = UUID()
+        let loading = SSHService()
+        loading.fileDiffs = [FileDiff(oldPath: "a", newPath: "a", isBinary: false, hunks: [])]
+        loading.saveToCache(repoID: id, selectedFileID: nil)
+        loading.isLoading = true
+        loading.stashBeforeSwitching(repoID: id, selectedFileID: nil)
+        _ = loading.restoreFromCache(repoID: id)
+        XCTAssertTrue(loading.fileDiffs.isEmpty)  // cache dropped
+
+        let idle = SSHService()
+        idle.fileDiffs = [FileDiff(oldPath: "a", newPath: "a", isBinary: false, hunks: [])]
+        idle.stashBeforeSwitching(repoID: id, selectedFileID: nil)
+        idle.fileDiffs = []
+        _ = idle.restoreFromCache(repoID: id)
+        XCTAssertEqual(idle.fileDiffs.count, 1)
+    }
 }

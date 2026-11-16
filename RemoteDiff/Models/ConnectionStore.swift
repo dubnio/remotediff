@@ -79,15 +79,25 @@ class ConnectionStore: ObservableObject {
 
     func updateConnection(_ connection: SavedConnection) {
         guard let i = connections.firstIndex(where: { $0.id == connection.id }) else { return }
+        let oldHost = connections[i].host
         connections[i] = connection
         save()
+        // The host string changed: close the master of the old one unless another connection still uses it.
+        if oldHost != connection.host, !connections.contains(where: { $0.host == oldHost }) {
+            SSHService.setPasswordAuth(allowed: false, forHost: oldHost)
+            SSHConnectionManager.shared.closeMaster(host: oldHost)
+        }
     }
 
     func deleteConnection(_ connection: SavedConnection) {
-        // A password-auth grant must not outlive its connection
-        SSHService.setPasswordAuth(allowed: false, forHost: connection.host)
         connections.removeAll { $0.id == connection.id }
         save()
+        // Only when no other saved connection uses this host string: drop its password-auth grant
+        // (which must not outlive its connection) and close RemoteDiff's master.
+        if !connections.contains(where: { $0.host == connection.host }) {
+            SSHService.setPasswordAuth(allowed: false, forHost: connection.host)
+            SSHConnectionManager.shared.closeMaster(host: connection.host)
+        }
     }
 
     // MARK: - Repository CRUD

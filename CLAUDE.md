@@ -6,7 +6,7 @@ Project guidelines for AI assistants working on RemoteDiff.
 
 ```bash
 swift build          # Build the project
-swift test           # Run all tests (218 tests across 8 suites)
+swift test           # Run all tests
 ./scripts/build-app.sh  # Build .app bundle + DMG installer (or .zip fallback)
 ```
 
@@ -51,6 +51,7 @@ The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxe
 - `SavedRepository` — repo path + git ref + include flags, nested under connection
 - `ConnectionStore` — persists as JSON in UserDefaults (`savedConnections_v2` key)
 - `CachedDiffResult` — in-memory diff cache per repository (in `SSHService`)
+- `SSHConnectionManager` — owns the one app-owned ssh ControlMaster per host (`Services/`); see SSH
 - `FileContentService` — fetches full file content for Side-by-Side / Full File modes
 - `RepoSelection` — current connection + repository IDs
 - `DisplayLine` — unified line model for all view modes
@@ -68,11 +69,9 @@ The entitlements file at `scripts/entitlements.plist` keeps the app **unsandboxe
 - **Change navigation**: `ScrollViewReader` + `scrollTo()` drives ⌘↑/⌘↓ jump-to-change. Anchors are hunk IDs in diff mode, grouped changed line IDs in file modes. `changeAnchors(for:)` computes targets per view mode.
 - **Deep linking**: `RemoteDiffApp` owns `pendingDeepLink` state, passes as `@Binding` to `ContentView`. On `.onOpenURL`, the URL is parsed via `DeepLink.parse(from:)`. `ContentView.handleDeepLink()` finds or creates a matching connection+repo, selects it, and auto-fetches.
 - **Error display**: errors are shown with `ErrorMessageView` (full text, selectable, Copy button, scrolls inside the box above 200 pt) — never a bare red `Text` with `lineLimit`. The one-line `LiveStatusBar` is the exception: it keeps `lineLimit(1)` but adds a tooltip with the full message and a `CopyButton`.
-- **Remote script safety**: anything interpolated into a script for `runSSHBash` goes through `SSHService.shellQuote` / `shellQuotePath`; script builders are static on `SSHService` so they're testable; deep-link values are validated in `DeepLink.parse`.
 - **`DisplayLineBuilder`** is pure logic with no UI dependencies — fully unit tested.
 - Script building centralized in `SSHService.buildDiffScript()` / `buildPollScript()` / `buildBranchScript()` / `buildFileContentScript()`.
-- SSH execution uses `runSSHBash()` which pipes scripts via stdin to avoid quoting issues. ssh started via `runSSHBash` runs one at a time on a serial queue so SSH-agent prompts (e.g. Touch ID) and askpass dialogs don't overlap; the watch-mode ControlMaster is launched outside the queue. Stale requests are dropped via the `shouldRun` closure before they start, every call gets `ConnectTimeout=10` plus keep-alives (deliberately overriding ~/.ssh/config, so an unreachable host can't hold the queue), and stderr is drained concurrently with stdout so a chatty remote can't deadlock it.
-- `ControlMasterWatcher` reuses `SSHService.runSSHBash()` with `ControlMasterWatcher.pollArguments` (its socket via `ControlPath`, `ControlMaster=no`, and every auth method disabled, because ssh falls back to a normal connection when the socket is gone; a dead master makes polls fail instead of prompting). At most one poll is in flight, and a generation counter discards polls and the delayed master check from a previous watch.
+- SSH rules (quoting, option order, the app-owned ControlMaster, prompts): see **SSH** below.
 - `FileContentService` fetches old + new file content in a single SSH call using a separator.
 - Fetch triggers live in `ContentView` (owns the state), not in `DiffView` (avoids stale closures).
 - `SavedRepository.init(from:)` uses `decodeIfPresent` for backward compatibility.
@@ -108,33 +107,30 @@ All dual-pane modes use `dualPaneScroll()` (shared `ScrollView` via `GeometryRea
 
 ## Testing
 
-Tests in `RemoteDiffTests/` (218 total across 8 suites):
-- `DiffParserTests` — 19 tests for unified diff parsing including untracked files
-- `DisplayLineBuilderTests` — 61 tests covering: display line building, inline ranges, deletion markers, hunk formatting, aligned side-by-side, `ChangeRegion.compute`, `ConnectorLink.compute` (incl. interleaved del/add collapse), `modifiedLineNumbers`, and `buildFullFileLines` modified-lines precedence
-- `SSHConfigTests` — 24 tests for SSH config parsing, per-host auth option args, ssh and ControlMaster argv ordering (host-key + auth options first), the auth-failure hint, and the host-key-failure hint
-- `SyntaxHighlighterTests` — 39 tests for syntax tokenization (keywords, strings, comments, numbers, block comments, **Python triple-quoted strings with multi-line state**, edge cases)
-- `SyntaxThemeTests` — 22 tests for theme registry, hex color parsing, built-in theme validation, dark/light classification
-- `DeepLinkTests` — 27 tests for URL scheme parsing, user@host format, edge cases, invalid inputs, host/ref/path injection validation
-- `SSHServiceTests` — 20 tests for `shellQuote`, `shellQuotePath`, and `buildDiffScript` / `buildPollScript` / `buildBranchScript` / `buildFileContentScript` output
-- `FileGroupTests` — 6 tests for sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
+Test suites in `RemoteDiffTests/`:
+- `DiffParserTests` — unified diff parsing including untracked files
+- `DisplayLineBuilderTests` — display line building, inline ranges, deletion markers, hunk formatting, aligned side-by-side, `ChangeRegion.compute`, `ConnectorLink.compute` (incl. interleaved del/add collapse), `modifiedLineNumbers`, and `buildFullFileLines` modified-lines precedence
+- `SSHConfigTests` — SSH config parsing, ssh argv building and option order, `SSHConnectionManager` argv / socket paths / fail-fast, failure messages and hints
+- `SyntaxHighlighterTests` — syntax tokenization (keywords, strings, comments, numbers, block comments, **Python triple-quoted strings with multi-line state**, edge cases)
+- `SyntaxThemeTests` — theme registry, hex color parsing, built-in theme validation, dark/light classification
+- `DeepLinkTests` — URL scheme parsing, user@host format, edge cases, invalid inputs, host/ref/path injection validation
+- `SSHServiceTests` — `stashBeforeSwitching`, `shellQuote`, `shellQuotePath`, and `buildDiffScript` / `buildPollScript` / `buildBranchScript` / `buildFileContentScript` output
+- `FileGroupTests` — sidebar directory grouping (preserves first-appearance order, root files, breadcrumb rendering)
 
 Run `swift test` after modifying any of: `DiffParser`, `DisplayLineBuilder`, `SyntaxHighlighter`, `SyntaxTheme`, `SSHConfig`, `DeepLink`, the `SSHService` script builders / shell quoting, or the `FileGroup` model in `SidebarView.swift`.
 
-## SSH Authentication
+## SSH
 
-Password and keyboard-interactive (incl. 2FA/OTP) auth is **off by default** and enabled per host, so a hostile host can't elicit a password dialog.
-- `SSHService.passwordAuthHosts` — hosts allowed to use password auth, stored in UserDefaults (`passwordAuthHosts` key). Toggled by "Allow password authentication for this host" in the sidebar connection editor via `setPasswordAuth(allowed:forHost:)`.
-- `SSHService.authOptionArgs(host:allowedHosts:)` → `-o KbdInteractiveAuthentication=no -o PasswordAuthentication=no` unless the host is allowed.
-- `SSHService.sshArguments(host:extraArgs:allowedHosts:)` builds the `runSSHBash()` argv with the auth options **first** (ssh keeps the first value of an option, so `extraArgs` can't re-enable password auth). `ControlMasterWatcher.startMaster()` prepends `authOptionArgs` the same way.
-- `SSHService.authFailureHint(stderr:exitCode:host:allowedHosts:)` appends an "Allow password authentication" hint only when ssh exits 255, the host isn't allowed, and the `Permission denied (...)` method list contains `password` or `keyboard-interactive`.
-- Every ssh process RemoteDiff starts passes `-o StrictHostKeyChecking=yes` **first** via `SSHService.hostKeyOptionArgs` (in `sshArguments` and `ControlMasterWatcher.masterArguments`), so an unknown or changed host key fails instead of prompting through askpass. ProxyJump/ProxyCommand hops run their own ssh without these options, so the askpass helper also refuses host-key questions (see below). `SSHService.hostKeyFailureHint(stderr:exitCode:host:)` explains how to add the key: run `ssh -o StrictHostKeyChecking=ask <host>` once in Terminal (overrides `accept-new`/`yes` in ~/.ssh/config) and verify the fingerprint. Not `ssh-keyscan`: it does not read ~/.ssh/config (aliases, ports) and does not verify anything.
-- Grants are removed when a connection is deleted (`ConnectionStore.deleteConnection` calls `setPasswordAuth(allowed: false, ...)`).
+All ssh code is in `SSHService` and `SSHConnectionManager` (`Services/`); their doc comments explain each ssh option. Keep these invariants:
 
-`SSHService.sshEnvironment()` (used by `runSSHBash()` and `ControlMasterWatcher.startMaster()`) enables GUI prompts, including key passphrases in watch mode:
-- `SSH_ASKPASS` → path to bundled `remotediff-askpass` (osascript-based native dialog)
-- `SSH_ASKPASS_REQUIRE=prefer` → tells SSH to prefer askpass even without a TTY
-- `DISPLAY=:0` → required for SSH to trigger askpass
+- **git never runs on the Mac.** Every remote operation is a script piped to `/usr/bin/ssh <host> bash` by `SSHService.runSSHBash()` (shell-agnostic). Anything interpolated into a script goes through `SSHService.shellQuote` / `shellQuotePath`; script builders are static on `SSHService` so they're testable; deep-link values are validated in `DeepLink.parse`.
+- **One ssh at a time.** `runSSHBash` runs ssh on a serial queue so Touch ID / askpass prompts never overlap; stale requests are dropped via `shouldRun`.
+- **Our options first.** ssh keeps the first value of an option, so every argv starts with `hostKeyOptionArgs` (`StrictHostKeyChecking=yes`), `authOptionArgs` (password / keyboard-interactive off unless the host is in `passwordAuthHosts`), `connectionOptionArgs` and `forwardingOptionArgs` (no agent / X11 / port forwarding: git runs on an untrusted remote). Build argv with `SSHService.sshArguments` / `SSHConnectionManager.masterArguments`, never by hand.
+- **One app-owned ControlMaster per host string.** `SSHConnectionManager` starts it on first use (inside the serial queue) with its own socket under `$TMPDIR/rdcm/<pid>/`; clients use `clientArguments` (socket only, every auth method off), so a missing master fails instead of prompting. Never reuse, check or close the user's own ControlMaster. `~/.ssh/config` otherwise applies.
+- **Clean up after ourselves.** Masters close at quit, when "Allow password authentication" changes for the host, and when the last connection using the host is deleted or edited; `removeLeftovers()` cleans up after a crashed instance at launch.
+- **Only the user causes prompts.** Watch-mode polls (`mayOpenConnection: false`) never authenticate; with no master they ask the user to click Reconnect. `ControlMasterWatcher` only polls through `runSSHBash` and owns no connection.
+- **Password auth is per-host opt-in** (`setPasswordAuth(allowed:forHost:)`, UserDefaults `passwordAuthHosts`); the grant is removed with the last connection for that host.
+- **Errors explain the next step.** `SSHService.failureMessage` adds `authFailureHint` / `hostKeyFailureHint` to ssh errors. Host-key advice is `ssh -o StrictHostKeyChecking=ask <host>` in Terminal (not `ssh-keyscan`, which ignores ~/.ssh/config and verifies nothing).
+- **Known limitation (task #14):** ProxyJump/ProxyCommand hops run their own ssh with the user's config and without our options.
 
-The askpass helper exits 1 without a dialog for host-key questions (prompt contains `continue connecting` or `Accept updated hostkeys`), which ssh treats as "no". The askpass helper passes the prompt to `osascript` as an argv item (never interpolated into the script source), so a server-controlled prompt can't inject AppleScript. It honours `SSH_ASKPASS_PROMPT`: `confirm` shows a No/Yes dialog (no default button, so Return does nothing; Escape is No; prints `yes`; No exits 1), `none` shows an OK-only notification (prints nothing), anything else shows the hidden-answer text field. Cancel or an osascript failure exits 1 (fail closed).
-
-The askpass helper is resolved once via `SSHService.askpassPath` (lazy static). It checks: (1) `Bundle.main.resources/remotediff-askpass` for `.app` installs, (2) `scripts/remotediff-askpass` relative to executable for dev builds.
+`SSHService.sshEnvironment()` sets `SSH_ASKPASS` (`scripts/remotediff-askpass`, bundled in the .app, located by `SSHService.askpassPath`), `SSH_ASKPASS_REQUIRE=prefer` and `DISPLAY=:0`, so ssh shows native dialogs for passwords and key passphrases. The helper must pass the prompt to `osascript` as an argument (never in the script source, so a server can't inject AppleScript), refuse host-key questions, exit 1 on Cancel or any failure, and close its dialog when the ssh that asked exits.

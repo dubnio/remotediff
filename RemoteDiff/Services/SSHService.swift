@@ -28,6 +28,19 @@ class SSHService: ObservableObject {
         cache[repoID] = CachedDiffResult(fileDiffs: fileDiffs, lastError: lastError, selectedFileID: selectedFileID)
     }
 
+    /// Saves the current results before switching repositories. If a fetch for this repo is still
+    /// in flight it is about to be discarded, so the pre-change results would be stale: drop the
+    /// cache entry instead, and returning to the repo fetches fresh data.
+    /// This also drops a good cache when the user leaves during a manual refresh (one extra fetch
+    /// on return, accepted).
+    func stashBeforeSwitching(repoID: UUID, selectedFileID: FileDiff.ID?) {
+        if isLoading {
+            clearCache(repoID: repoID)
+        } else {
+            saveToCache(repoID: repoID, selectedFileID: selectedFileID)
+        }
+    }
+
     /// Restores cached results. Returns the previously selected file ID, or nil if no cache.
     func restoreFromCache(repoID: UUID) -> FileDiff.ID? {
         // Selecting another repo makes any in-flight fetch stale.
@@ -179,8 +192,11 @@ class SSHService: ObservableObject {
 
     static func setPasswordAuth(allowed: Bool, forHost host: String) {
         var hosts = passwordAuthHosts
+        guard hosts.contains(host) != allowed else { return }
         if allowed { hosts.insert(host) } else { hosts.remove(host) }
         UserDefaults.standard.set(Array(hosts).sorted(), forKey: passwordAuthHostsKey)
+        // The master was opened with the old setting; the next connection must use the new one.
+        SSHConnectionManager.shared.closeMaster(host: host)
     }
 
     /// ssh options that refuse unknown or changed host keys, so a first connection can never be
@@ -196,13 +212,18 @@ class SSHService: ObservableObject {
     /// instead of holding the serial queue for ~75 s; keep-alives detect a dead connection.
     static let connectionOptionArgs = ["-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
 
+    /// ssh options that turn off forwarding. Git runs on an untrusted remote, so it must never get
+    /// the Mac's agent or X11 display, and the user's LocalForward/RemoteForward lines would
+    /// otherwise collide with the user's own ssh sessions.
+    static let forwardingOptionArgs = ["-o", "ForwardAgent=no", "-o", "ForwardX11=no", "-o", "ClearAllForwardings=yes"]
+
     /// Full ssh argv for `runSSHBash`. Host-key and auth options come first so nothing in
     /// `extraArgs` can override them (ssh keeps the first value of an option). A command-line
     /// `-o` also beats ~/.ssh/config, which is intended.
     /// `--` ends option parsing so a host string can never be read as an ssh option.
     static func sshArguments(host: String, extraArgs: [String], allowedHosts: Set<String>) -> [String] {
         hostKeyOptionArgs + authOptionArgs(host: host, allowedHosts: allowedHosts)
-            + connectionOptionArgs + extraArgs + ["--", host, "bash"]
+            + connectionOptionArgs + forwardingOptionArgs + extraArgs + ["--", host, "bash"]
     }
 
     /// Extra guidance appended to ssh errors when authentication was denied for a host
@@ -273,80 +294,128 @@ class SSHService: ObservableObject {
     /// Serial queue for every `runSSHBash` call.
     private static let sshQueue = DispatchQueue(label: "remotediff.ssh", qos: .userInitiated)
 
+    /// Builds the user-facing message for a failed ssh run: its stderr (or the exit code) plus hints.
+    static func failureMessage(stderr: String, exitCode: Int32, host: String, allowedHosts: Set<String>) -> String {
+        var msg = stderr.isEmpty ? "SSH exited with code \(exitCode)" : stderr
+        if let hint = authFailureHint(stderr: stderr, exitCode: exitCode, host: host, allowedHosts: allowedHosts) {
+            msg += "\n" + hint
+        }
+        if let hint = hostKeyFailureHint(stderr: stderr, exitCode: exitCode, host: host) {
+            msg += "\n" + hint
+        }
+        return msg
+    }
+
     /// Runs a bash script on a remote host by piping via stdin.
     /// This avoids shell quoting issues regardless of the remote user's login shell.
+    /// All ssh goes through one app-owned ControlMaster per host (`SSHConnectionManager`), opened
+    /// inside the serial queue on first use, so the master's auth prompts (Touch ID, passphrase,
+    /// password) are serialised with everything else and a host authenticates once. Clients carry
+    /// no credentials: they only use the master's socket.
     /// Sets SSH_ASKPASS so key passphrase (and, if enabled, password) prompts appear as native macOS dialogs.
     /// Password and keyboard-interactive auth are disabled unless the host is in `passwordAuthHosts`.
-    /// ssh processes started via `runSSHBash` run one at a time (serial `sshQueue`), so their agent
-    /// signing (e.g. Touch ID) and askpass prompts don't overlap. The watch-mode ControlMaster
-    /// (`ControlMasterWatcher.startMaster`) is launched outside the queue (separate task), and
-    /// ProxyJump hops are their own processes. `completion` is called on that serial queue: callers
+    /// ssh processes started via `runSSHBash` run one at a time (serial `sshQueue`); ProxyJump hops
+    /// are their own processes. `completion` is called on that serial queue: callers
     /// must hop to main (they do) and must not block it.
     /// `shouldRun` is evaluated on the main thread just before the ssh starts, so callers can drop
     /// requests that went stale while queued; the completion then gets `SSHError.cancelled`.
+    /// `mayOpenConnection: false` (background polls) never opens a master: with none alive the call
+    /// fails with a "Reconnect" message instead of showing an auth prompt the user didn't cause.
+    /// If the client fails with 255 and the master has died, the master is reopened and the client retried once.
     static func runSSHBash(host: String, script: String,
                            extraArgs: [String] = [],
                            shouldRun: (() -> Bool)? = nil,
+                           mayOpenConnection: Bool = true,
                            completion: @escaping (Result<String, Error>) -> Void) {
+        let requestedAt = ProcessInfo.processInfo.systemUptime  // before queueing: see ensureMaster
         sshQueue.async {
             if let shouldRun, !DispatchQueue.main.sync(execute: shouldRun) {
                 completion(.failure(SSHError.cancelled))
                 return
             }
-            let allowed = passwordAuthHosts
-            let process = Process()
-            process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
-            process.arguments = sshArguments(host: host, extraArgs: extraArgs, allowedHosts: allowed)
-            process.environment = sshEnvironment()
-
-            let inPipe = Pipe()
-            let outPipe = Pipe()
-            let errPipe = Pipe()
-            process.standardInput = inPipe
-            process.standardOutput = outPipe
-            process.standardError = errPipe
-
-            do {
-                try process.run()
-
-                if let data = script.data(using: .utf8) {
-                    inPipe.fileHandleForWriting.write(data)
-                }
-                inPipe.fileHandleForWriting.closeFile()
-
-                // Read before waiting to avoid pipe buffer deadlock. Drain stderr concurrently:
-                // reading stdout to EOF first would hang if the remote filled the stderr pipe
-                // (~64 KB), and that would block the serial queue for every later ssh.
-                var errData = Data()
-                let errDrained = DispatchGroup()
-                errDrained.enter()
-                DispatchQueue.global(qos: .userInitiated).async {
-                    errData = errPipe.fileHandleForReading.readDataToEndOfFile()
-                    errDrained.leave()
-                }
-                let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-                errDrained.wait()
-
-                process.waitUntilExit()
-
-                let stdout = String(data: outData, encoding: .utf8) ?? ""
-                let stderr = String(data: errData, encoding: .utf8) ?? ""
-
-                if process.terminationStatus == 0 {
-                    completion(.success(stdout))
-                } else {
-                    var msg = stderr.isEmpty ? "SSH exited with code \(process.terminationStatus)" : stderr
-                    if let hint = authFailureHint(stderr: stderr, exitCode: process.terminationStatus, host: host, allowedHosts: allowed) {
-                        msg += "\n" + hint
-                    }
-                    if let hint = hostKeyFailureHint(stderr: stderr, exitCode: process.terminationStatus, host: host) {
-                        msg += "\n" + hint
-                    }
-                    completion(.failure(SSHError.commandFailed(code: process.terminationStatus, message: msg)))
-                }
-            } catch {
+            let manager = SSHConnectionManager.shared
+            var socketPath: String
+            switch manager.ensureMaster(host: host, requestedAt: requestedAt, mayStart: mayOpenConnection) {
+            case .failure(let error):
                 completion(.failure(error))
+                return
+            case .success(let path):
+                socketPath = path
             }
+
+            // ensureMaster can block for minutes (auth): the request may be stale by now.
+            if let shouldRun, !DispatchQueue.main.sync(execute: shouldRun) {
+                completion(.failure(SSHError.cancelled))
+                return
+            }
+
+            var result = runClient(host: host, script: script, socketPath: socketPath, extraArgs: extraArgs)
+            if case .failure(let error) = result, case SSHError.commandFailed(let code, _)? = error as? SSHError, code == 255,
+               !manager.isMasterUsable(host: host) {
+                switch manager.ensureMaster(host: host, requestedAt: requestedAt, mayStart: mayOpenConnection) {
+                case .failure(let error):
+                    completion(.failure(error))
+                    return
+                case .success(let path):
+                    socketPath = path
+                }
+                result = runClient(host: host, script: script, socketPath: socketPath, extraArgs: extraArgs)
+            }
+            completion(result)
+        }
+    }
+
+    /// Runs one ssh client through the master's socket and collects its output.
+    private static func runClient(host: String, script: String, socketPath: String,
+                                  extraArgs: [String]) -> Result<String, Error> {
+        let allowed = passwordAuthHosts
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
+        process.arguments = sshArguments(host: host,
+                                         extraArgs: SSHConnectionManager.clientArguments(socketPath: socketPath) + extraArgs,
+                                         allowedHosts: allowed)
+        process.environment = sshEnvironment()
+
+        let inPipe = Pipe()
+        let outPipe = Pipe()
+        let errPipe = Pipe()
+        process.standardInput = inPipe
+        process.standardOutput = outPipe
+        process.standardError = errPipe
+
+        do {
+            try process.run()
+
+            if let data = script.data(using: .utf8) {
+                inPipe.fileHandleForWriting.write(data)
+            }
+            inPipe.fileHandleForWriting.closeFile()
+
+            // Read before waiting to avoid pipe buffer deadlock. Drain stderr concurrently:
+            // reading stdout to EOF first would hang if the remote filled the stderr pipe
+            // (~64 KB), and that would block the serial queue for every later ssh.
+            var errData = Data()
+            let errDrained = DispatchGroup()
+            errDrained.enter()
+            DispatchQueue.global(qos: .userInitiated).async {
+                errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                errDrained.leave()
+            }
+            let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
+            errDrained.wait()
+
+            process.waitUntilExit()
+
+            let stdout = String(data: outData, encoding: .utf8) ?? ""
+            let stderr = String(data: errData, encoding: .utf8) ?? ""
+
+            if process.terminationStatus == 0 {
+                return .success(stdout)
+            }
+            let msg = failureMessage(stderr: stderr, exitCode: process.terminationStatus, host: host, allowedHosts: allowed)
+            return .failure(SSHError.commandFailed(code: process.terminationStatus, message: msg))
+        } catch {
+            return .failure(error)
         }
     }
 }
