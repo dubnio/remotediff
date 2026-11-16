@@ -337,9 +337,6 @@ struct SidebarView: View {
         editRepoName = repo.name
         remoteBranch = ""
 
-        // Fetch current branch from remote
-        fetchRemoteBranch()
-
         // Restore cached results, or auto-fetch if no cache and connection is ready
         let cachedFileID = sshService.restoreFromCache(repoID: repo.id)
         selectedFileID = cachedFileID
@@ -354,10 +351,13 @@ struct SidebarView: View {
             }
         }
 
-        // Auto-fetch when there's no cached data and the repo is configured
+        // Auto-fetch when there's no cached data and the repo is configured.
+        // fetchDiff() also runs the branch lookup (a separate ssh call), so only run it here when not auto-fetching.
         if cachedFileID == nil && sshService.fileDiffs.isEmpty
             && !connection.host.isEmpty && !repo.repoPath.isEmpty {
             fetchDiff()
+        } else {
+            fetchRemoteBranch()
         }
     }
 
@@ -367,6 +367,7 @@ struct SidebarView: View {
             selectedHost = ""
             repoPath = ""
             gitRef = "HEAD"
+            sshService.cancelPendingFetch()
             sshService.fileDiffs = []
             selectedFileID = nil
         }
@@ -379,6 +380,7 @@ struct SidebarView: View {
     private func deleteRepo(_ repo: SavedRepository, from connection: SavedConnection) {
         if selection?.repositoryID == repo.id {
             selection = nil
+            sshService.cancelPendingFetch()
             sshService.fileDiffs = []
             selectedFileID = nil
         }
@@ -431,8 +433,11 @@ struct SidebarView: View {
             return
         }
         let script = SSHService.buildBranchScript(repoPath: repoPath)
-        SSHService.runSSHBash(host: selectedHost, script: script) { [self] result in
+        let repoID = selection?.repositoryID
+        SSHService.runSSHBash(host: selectedHost, script: script,
+                              shouldRun: { [self] in selection?.repositoryID == repoID }) { [self] result in
             DispatchQueue.main.async {
+                guard selection?.repositoryID == repoID else { return }
                 switch result {
                 case .success(let output):
                     remoteBranch = output.trimmingCharacters(in: .whitespacesAndNewlines)

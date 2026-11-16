@@ -19,6 +19,9 @@ class SSHService: ObservableObject {
     /// Per-repository in-memory cache of fetched diffs
     private var cache: [UUID: CachedDiffResult] = [:]
 
+    /// Bumped by every fetch and cache restore; results from an older generation are discarded.
+    private var fetchGeneration = 0
+
     // MARK: - Cache
 
     func saveToCache(repoID: UUID, selectedFileID: FileDiff.ID?) {
@@ -27,6 +30,9 @@ class SSHService: ObservableObject {
 
     /// Restores cached results. Returns the previously selected file ID, or nil if no cache.
     func restoreFromCache(repoID: UUID) -> FileDiff.ID? {
+        // Selecting another repo makes any in-flight fetch stale.
+        fetchGeneration += 1
+        isLoading = false
         guard let cached = cache[repoID] else {
             fileDiffs = []
             lastError = nil
@@ -41,6 +47,12 @@ class SSHService: ObservableObject {
         cache.removeValue(forKey: repoID)
     }
 
+    /// Discards any in-flight fetch, e.g. because its repository was deleted.
+    func cancelPendingFetch() {
+        fetchGeneration += 1
+        isLoading = false
+    }
+
     // MARK: - Fetch Diff
 
     func fetchDiff(host: String, repoPath: String, gitRef: String,
@@ -48,13 +60,17 @@ class SSHService: ObservableObject {
                    completion: (() -> Void)? = nil) {
         isLoading = true
         lastError = nil
+        fetchGeneration += 1
+        let generation = fetchGeneration
 
         let script = Self.buildDiffScript(repoPath: repoPath, gitRef: gitRef,
                                           includeStaged: includeStaged, includeUntracked: includeUntracked)
 
-        Self.runSSHBash(host: host, script: script) { [weak self] result in
+        Self.runSSHBash(host: host, script: script,
+                        shouldRun: { [weak self] in self?.fetchGeneration == generation }) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
+                guard self.fetchGeneration == generation else { return }
                 self.isLoading = false
 
                 switch result {
@@ -176,12 +192,17 @@ class SSHService: ObservableObject {
         allowedHosts.contains(host) ? [] : ["-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no"]
     }
 
+    /// ssh options that bound how long a connection can hang: an unreachable host fails after 10 s
+    /// instead of holding the serial queue for ~75 s; keep-alives detect a dead connection.
+    static let connectionOptionArgs = ["-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3"]
+
     /// Full ssh argv for `runSSHBash`. Host-key and auth options come first so nothing in
     /// `extraArgs` can override them (ssh keeps the first value of an option). A command-line
     /// `-o` also beats ~/.ssh/config, which is intended.
     /// `--` ends option parsing so a host string can never be read as an ssh option.
     static func sshArguments(host: String, extraArgs: [String], allowedHosts: Set<String>) -> [String] {
-        hostKeyOptionArgs + authOptionArgs(host: host, allowedHosts: allowedHosts) + extraArgs + ["--", host, "bash"]
+        hostKeyOptionArgs + authOptionArgs(host: host, allowedHosts: allowedHosts)
+            + connectionOptionArgs + extraArgs + ["--", host, "bash"]
     }
 
     /// Extra guidance appended to ssh errors when authentication was denied for a host
@@ -249,14 +270,29 @@ class SSHService: ObservableObject {
         return nil
     }()
 
+    /// Serial queue for every `runSSHBash` call.
+    private static let sshQueue = DispatchQueue(label: "remotediff.ssh", qos: .userInitiated)
+
     /// Runs a bash script on a remote host by piping via stdin.
     /// This avoids shell quoting issues regardless of the remote user's login shell.
     /// Sets SSH_ASKPASS so key passphrase (and, if enabled, password) prompts appear as native macOS dialogs.
     /// Password and keyboard-interactive auth are disabled unless the host is in `passwordAuthHosts`.
+    /// ssh processes started via `runSSHBash` run one at a time (serial `sshQueue`), so their agent
+    /// signing (e.g. Touch ID) and askpass prompts don't overlap. The watch-mode ControlMaster
+    /// (`ControlMasterWatcher.startMaster`) is launched outside the queue (separate task), and
+    /// ProxyJump hops are their own processes. `completion` is called on that serial queue: callers
+    /// must hop to main (they do) and must not block it.
+    /// `shouldRun` is evaluated on the main thread just before the ssh starts, so callers can drop
+    /// requests that went stale while queued; the completion then gets `SSHError.cancelled`.
     static func runSSHBash(host: String, script: String,
                            extraArgs: [String] = [],
+                           shouldRun: (() -> Bool)? = nil,
                            completion: @escaping (Result<String, Error>) -> Void) {
-        DispatchQueue.global(qos: .userInitiated).async {
+        sshQueue.async {
+            if let shouldRun, !DispatchQueue.main.sync(execute: shouldRun) {
+                completion(.failure(SSHError.cancelled))
+                return
+            }
             let allowed = passwordAuthHosts
             let process = Process()
             process.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
@@ -278,9 +314,18 @@ class SSHService: ObservableObject {
                 }
                 inPipe.fileHandleForWriting.closeFile()
 
-                // Read before waiting to avoid pipe buffer deadlock
+                // Read before waiting to avoid pipe buffer deadlock. Drain stderr concurrently:
+                // reading stdout to EOF first would hang if the remote filled the stderr pipe
+                // (~64 KB), and that would block the serial queue for every later ssh.
+                var errData = Data()
+                let errDrained = DispatchGroup()
+                errDrained.enter()
+                DispatchQueue.global(qos: .userInitiated).async {
+                    errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                    errDrained.leave()
+                }
                 let outData = outPipe.fileHandleForReading.readDataToEndOfFile()
-                let errData = errPipe.fileHandleForReading.readDataToEndOfFile()
+                errDrained.wait()
 
                 process.waitUntilExit()
 
@@ -310,9 +355,11 @@ class SSHService: ObservableObject {
 
 enum SSHError: LocalizedError {
     case commandFailed(code: Int32, message: String)
+    case cancelled
 
     var errorDescription: String? {
         switch self {
+        case .cancelled: return "Cancelled"
         case .commandFailed(_, let message): return message
         }
     }

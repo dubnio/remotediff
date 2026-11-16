@@ -87,6 +87,7 @@ final class SSHConfigTests: XCTestCase {
             SSHService.sshArguments(host: "h", extraArgs: ["-o", "ControlPath=/x"], allowedHosts: []),
             ["-o", "StrictHostKeyChecking=yes",
              "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no",
+             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
              "-o", "ControlPath=/x", "--", "h", "bash"]
         )
     }
@@ -94,8 +95,20 @@ final class SSHConfigTests: XCTestCase {
     func testSSHArgumentsKeepHostKeyCheckingForAllowedHost() {
         XCTAssertEqual(
             SSHService.sshArguments(host: "h", extraArgs: ["-o", "ControlPath=/x"], allowedHosts: ["h"]),
-            ["-o", "StrictHostKeyChecking=yes", "-o", "ControlPath=/x", "--", "h", "bash"]
+            ["-o", "StrictHostKeyChecking=yes",
+             "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3",
+             "-o", "ControlPath=/x", "--", "h", "bash"]
         )
+    }
+
+    func testPollArgumentsUseExistingSocketOnly() {
+        let args = ControlMasterWatcher.pollArguments(socketPath: "/s")
+        XCTAssertEqual(Array(args.prefix(2)), ["-o", "ControlPath=/s"])
+        for option in ["ControlMaster=no", "BatchMode=yes", "IdentityAgent=none", "PubkeyAuthentication=no",
+                       "PasswordAuthentication=no", "KbdInteractiveAuthentication=no",
+                       "GSSAPIAuthentication=no", "HostbasedAuthentication=no"] {
+            XCTAssertTrue(args.contains(option), option)
+        }
     }
 
     // MARK: - Host key failures
@@ -167,6 +180,7 @@ final class SSHConfigTests: XCTestCase {
                         "-o", "KbdInteractiveAuthentication=no", "-o", "PasswordAuthentication=no"])
         XCTAssertEqual(Array(args.suffix(2)), ["--", "h"])
         XCTAssertTrue(args.contains("ControlPath=/s"))
+        XCTAssertTrue(args.contains("ConnectTimeout=10"))
     }
 
     func testMasterArgumentsKeepHostKeyCheckingForAllowedHost() {

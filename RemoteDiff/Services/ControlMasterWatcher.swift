@@ -21,6 +21,9 @@ class ControlMasterWatcher: ObservableObject {
     private var pollTimer: Timer?
     private var masterProcess: Process?
     private var lastStatOutput: String = ""
+    /// Bumped on every start/stop so polls from a previous watch are discarded.
+    private var generation = 0
+    private var pollInFlight = false
     private var cancellables = Set<AnyCancellable>()
     private let rawChange = PassthroughSubject<Void, Never>()
 
@@ -49,6 +52,8 @@ class ControlMasterWatcher: ObservableObject {
     func start(host: String, repoPath: String, gitRef: String,
                includeStaged: Bool = false, includeUntracked: Bool = false) {
         stop()
+        generation += 1
+        pollInFlight = false
 
         self.host = host
         self.repoPath = repoPath
@@ -62,6 +67,7 @@ class ControlMasterWatcher: ObservableObject {
     }
 
     func stop() {
+        generation += 1
         pollTimer?.invalidate()
         pollTimer = nil
         terminateMaster()
@@ -83,6 +89,7 @@ class ControlMasterWatcher: ObservableObject {
             "-o", "ControlPersist=yes",
             "-o", "ServerAliveInterval=15",
             "-o", "ServerAliveCountMax=3",
+            "-o", "ConnectTimeout=10",
             "-N",
             "--", host
         ]
@@ -97,11 +104,13 @@ class ControlMasterWatcher: ObservableObject {
         process.standardOutput = FileHandle.nullDevice
         process.standardError = FileHandle.nullDevice
 
+        // Captured so the delayed check uses this watch's values even if start()/stop() run meanwhile.
+        let gen = generation, host = self.host, socketPath = self.socketPath
         do {
             try process.run()
             masterProcess = process
             DispatchQueue.global().asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.verifyMasterAndStartPolling()
+                self?.verifyMasterAndStartPolling(generation: gen, host: host, socketPath: socketPath)
             }
         } catch {
             DispatchQueue.main.async { [weak self] in
@@ -110,7 +119,7 @@ class ControlMasterWatcher: ObservableObject {
         }
     }
 
-    private func verifyMasterAndStartPolling() {
+    private func verifyMasterAndStartPolling(generation gen: Int, host: String, socketPath: String) {
         let check = Process()
         check.executableURL = URL(fileURLWithPath: "/usr/bin/ssh")
         check.arguments = ["-o", "ControlPath=\(socketPath)", "-O", "check", "--", host]
@@ -122,16 +131,18 @@ class ControlMasterWatcher: ObservableObject {
             check.waitUntilExit()
 
             DispatchQueue.main.async { [weak self] in
+                guard let self, gen == self.generation else { return }  // watch stopped or restarted
                 if check.terminationStatus == 0 {
-                    self?.status = .watching
-                    self?.startPolling()
+                    self.status = .watching
+                    self.startPolling()
                 } else {
-                    self?.status = .error("ControlMaster socket not established")
+                    self.status = .error("ControlMaster socket not established")
                 }
             }
         } catch {
             DispatchQueue.main.async { [weak self] in
-                self?.status = .error("Failed to check master: \(error.localizedDescription)")
+                guard let self, gen == self.generation else { return }
+                self.status = .error("Failed to check master: \(error.localizedDescription)")
             }
         }
     }
@@ -153,21 +164,36 @@ class ControlMasterWatcher: ObservableObject {
     // MARK: - Polling
 
     private func startPolling() {
+        pollTimer?.invalidate()
         pollTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.pollForChanges()
         }
     }
 
+    /// Extra ssh args for polls: use the master's socket only. ssh falls back to a normal
+    /// connection when the socket is missing, so every auth method is disabled too — a dead
+    /// master makes the poll fail at once instead of prompting (Touch ID / password) every 2 s.
+    static func pollArguments(socketPath: String) -> [String] {
+        ["-o", "ControlPath=\(socketPath)", "-o", "ControlMaster=no", "-o", "BatchMode=yes",
+         "-o", "IdentityAgent=none", "-o", "PubkeyAuthentication=no",
+         "-o", "PasswordAuthentication=no", "-o", "KbdInteractiveAuthentication=no",
+         "-o", "GSSAPIAuthentication=no", "-o", "HostbasedAuthentication=no"]
+    }
+
     private func pollForChanges() {
+        guard !pollInFlight else { return }
+        pollInFlight = true
+        let gen = generation
         let script = SSHService.buildPollScript(
             repoPath: repoPath, gitRef: gitRef,
             includeStaged: includeStaged, includeUntracked: includeUntracked
         )
-        let controlArgs = ["-o", "ControlPath=\(socketPath)"]
-
-        SSHService.runSSHBash(host: host, script: script, extraArgs: controlArgs) { [weak self] result in
+        SSHService.runSSHBash(host: host, script: script, extraArgs: Self.pollArguments(socketPath: socketPath),
+                              shouldRun: { [weak self] in self?.generation == gen }) { [weak self] result in
             DispatchQueue.main.async {
                 guard let self else { return }
+                guard gen == self.generation else { return }
+                self.pollInFlight = false
 
                 switch result {
                 case .success(let output):
